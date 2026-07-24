@@ -117,7 +117,7 @@ merge() { # merge <ext-dir> <mode:add|update>
   # On update, drop the old merged copies first so renames don't linger.
   if [ "$mode" = "update" ] && [ -f "$MANIFEST_DIR/$name.manifest" ]; then
     while IFS= read -r rel; do
-      [ -n "$rel" ] && rm -f "$HARNESS_ROOT/$rel"
+      [ -n "$rel" ] && rm -rf "${HARNESS_ROOT:?}/$rel"
     done < "$MANIFEST_DIR/$name.manifest"
     rm -f "$MANIFEST_DIR/$name.manifest"
     strip_agents_section "$name"

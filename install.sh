@@ -2,9 +2,10 @@
 # install.sh — adopt the pipa_harness in any project.
 # Usage: /path/to/pipa_harness/install.sh   (run from the target project root)
 #
-# Idempotent: copies harness files with cp -n (never overwrites existing),
-# symlinks .opencode/ into the harness, and leaves an existing root AGENTS.md
-# untouched. After install, edit harness/AGENTS.md for your project.
+# Idempotent: symlinks harness/ -> this repo (base updates reach every project
+# instantly), creates .opencode/ from templates/ (never overwrites existing
+# files), and leaves an existing root AGENTS.md untouched. After install, edit
+# harness/AGENTS.md for your project.
 set -eu
 
 HARNESS_SRC="$(cd "$(dirname "$0")" && pwd)"
@@ -74,6 +75,7 @@ if ! grep -q "graphify-out/" "$TARGET/.gitignore" 2>/dev/null; then
 graphify-out/
 .opencode/*.local.*
 harness/state/*.local.md
+harness/state/scratch/
 EOF
 fi
 

@@ -2,6 +2,7 @@
 graphify-out/
 *.local.*
 state/*.local.md
+state/scratch/
 
 # OS
 .DS_Store
