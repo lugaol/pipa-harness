@@ -47,9 +47,11 @@ check("git-repo", ok, out if ok else "not a git repo")
 ok, _ = run(["opencode", "--version"])
 check("opencode", ok, "installed" if ok else "not on PATH (optional)")
 
-# emdash (CLI presence; the app is GUI)
+# emdash (GUI app — check PATH, then the macOS app bundle)
 ok, _ = run(["emdash", "--version"])
-check("emdash", ok, "installed" if ok else "not on PATH (GUI app — optional)")
+if not ok and sys.platform == "darwin":
+    ok, _ = run(["ls", "-d", "/Applications/Emdash.app"])
+check("emdash", ok, "installed" if ok else "not installed (GUI app — optional)")
 
 summary = {
     "pass": sum(1 for c in CHECKS if c["status"] == "pass"),

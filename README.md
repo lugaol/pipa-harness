@@ -26,16 +26,17 @@ gateway you control.
 
 ## Quick start
 
+One command installs anything missing (uv, ollama, litellm, graphify,
+opencode, obsidian, emdash), pulls the configured ollama models, starts both
+services (ollama `:11434`, litellm gateway `:4000`), and verifies:
+
 ```bash
-# 1. Start the model gateway (needs: uv tool install 'litellm[proxy]')
-litellm --config config/litellm.yaml --port 4000
-
-# 2. Health check
-python3 bin/harness_status.py
-
-# 3. Run OpenCode (https://opencode.ai)
-opencode
+bin/pipa-up.sh            # macOS + Linux; idempotent — safe to re-run
+bin/pipa-up.sh --status   # report only, change nothing
+bin/pipa-up.sh --stop     # stop the services it started
 ```
+
+Then: `cd your-project && opencode`
 
 ### Adopt it in your own project
 
