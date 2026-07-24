@@ -1,0 +1,10 @@
+# pipa_harness repo gitignore
+graphify-out/
+*.local.*
+state/*.local.md
+
+# OS
+.DS_Store
+
+# Obsidian workspace state (committed app config stays)
+.obsidian/workspace*.json

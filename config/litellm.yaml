@@ -1,0 +1,66 @@
+# ── pipa_harness LiteLLM gateway config ──────────────────────────────
+# Single model gateway for ALL tools in the harness: OpenCode, emdash agents,
+# bin/ scripts, and the optional dashboard. Run with:
+#   litellm --config harness/config/litellm.yaml --port 4000
+# Then point everything at http://localhost:4000 (OpenAI-compatible).
+#
+# The "model_name" aliases below are what tools reference — swap the actual
+# model/api_key here in ONE place without touching agents or scripts.
+#
+# Docs: https://docs.litellm.ai/docs/proxy/configs
+
+model_list:
+  # ── Primary coding model (OpenCode build agent, implementation) ──
+  - model_name: primary
+    litellm_params:
+      model: openai/gpt-oss-120b          # swap for anthropic/claude-sonnet-4-5 etc.
+      api_base: http://localhost:11434/v1 # Ollama; or remove to use a cloud provider
+      api_key: "ollama"                   # dummy key for local Ollama
+
+  # ── Fast/cheap model (triage, titles, summaries, small tasks) ──
+  - model_name: fast
+    litellm_params:
+      model: openai/qwen2.5-coder:7b
+      api_base: http://localhost:11434/v1
+      api_key: "ollama"
+
+  # ── Deep reasoning model (research, complex analysis) ──
+  - model_name: deep
+    litellm_params:
+      model: openai/gpt-oss:20b
+      api_base: http://localhost:11434/v1
+      api_key: "ollama"
+
+  # ── Read-only exploration model (cheap, fast codebase Q&A) ──
+  - model_name: explore
+    litellm_params:
+      model: openai/qwen2.5-coder:7b
+      api_base: http://localhost:11434/v1
+      api_key: "ollama"
+
+# ── Example: cloud providers (uncomment + set env vars) ─────────────
+  # - model_name: primary
+  #   litellm_params:
+  #     model: anthropic/claude-sonnet-4-5
+  #     api_key: os.environ/ANTHROPIC_API_KEY
+  # - model_name: fast
+  #   litellm_params:
+  #     model: openai/gpt-5-mini
+  #     api_key: os.environ/OPENAI_API_KEY
+
+# ── Routing: fallback from primary -> deep if primary fails ──
+litellm_settings:
+  drop_params: true
+  num_retries: 2
+  request_timeout: 300
+
+router_settings:
+  routing_strategy: simple-shuffle
+  fallbacks:
+    - primary: [deep]
+    - fast: [primary]
+    - deep: [primary]
+
+general_settings:
+  master_key: sk-pipa-local            # change if exposing beyond localhost
+  # database_url: ""                   # set for persistent spend tracking

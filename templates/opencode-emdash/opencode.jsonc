@@ -1,0 +1,63 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "litellm/primary",
+  "small_model": "litellm/fast",
+
+  "provider": {
+    "litellm": {
+      "options": {
+        "baseURL": "http://localhost:4000/v1",
+        "apiKey": "sk-pipa-local"
+      }
+    }
+  },
+
+  "instructions": [
+    "AGENTS.md",
+    "rules/*.md"
+  ],
+
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "ls *": "allow",
+      "cat *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "grep *": "allow",
+      "rg *": "allow",
+      "find *": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git branch*": "allow",
+      "graphify *": "allow",
+      "python3 bin/harness_status.py*": "allow",
+      "sh bin/pipa-extend.sh *": "allow",
+      "litellm *": "allow"
+    },
+    "graphify_*": "allow",
+    "context7_*": "allow",
+    "skill": { "*": "allow" }
+  },
+
+  "mcp": {
+    "graphify": {
+      "type": "local",
+      "command": ["graphify-mcp", "."],
+      "enabled": true,
+      "timeout": 15000
+    },
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true,
+      "timeout": 30000
+    }
+  },
+
+  "subagent_depth": 2,
+  "compaction": { "auto": true, "prune": false, "reserved": 10000 },
+  "watcher": { "ignore": ["node_modules/**", "dist/**", "build/**", ".git/**", "graphify-out/**"] }
+}
