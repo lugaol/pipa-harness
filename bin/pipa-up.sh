@@ -1,12 +1,18 @@
 #!/bin/bash
 # pipa-up.sh — one command, everything running.
 #
-# Checks what's missing, installs it, starts services, verifies:
-#   uv · ollama · litellm · graphify (+mcp) · opencode · obsidian · emdash
+# Run it ANYWHERE: installs missing tools, starts services, sets up the
+# global OpenCode config, and — when run from a project root — scaffolds
+# .harness_extension/ (rules, skills, agents, AGENTS.md, memory) so the
+# project is wired in one shot.
+#
+#   tools:    uv · ollama · litellm · graphify (+mcp) · opencode · obsidian · emdash
 #   services: ollama serve (:11434) + litellm gateway (:4000)
+#   global:   PATH in shell rc + ~/.config/opencode (base config + agents)
+#   project:  .harness_extension/ + root AGENTS.md + .opencode/ (idempotent)
 #
 # Usage:
-#   bin/pipa-up.sh              install missing pieces, start services, verify
+#   bin/pipa-up.sh              install missing pieces, start services, wire project
 #   bin/pipa-up.sh --status     report only, change nothing
 #   bin/pipa-up.sh --stop       stop the services started by this script
 #   bin/pipa-up.sh --no-pull    skip ollama model downloads
@@ -127,7 +133,7 @@ ensure_opencode() {
 }
 
 ensure_obsidian() {
-  [ "$GUI_APPS" = 0 ] && return
+  [ "$GUI_APPS" = 0 ] && return 0
   if [ "$OS" = Darwin ] && [ -d /Applications/Obsidian.app ]; then ok "obsidian"; return; fi
   if [ "$OS" = Linux ] && { have obsidian || flatpak info md.obsidian.Obsidian >/dev/null 2>&1; }; then ok "obsidian"; return; fi
   [ "$MODE" = status ] && { warn "obsidian: MISSING (GUI app)"; return; }
@@ -145,7 +151,7 @@ ensure_obsidian() {
 }
 
 ensure_emdash() {
-  [ "$GUI_APPS" = 0 ] && return
+  [ "$GUI_APPS" = 0 ] && return 0
   if [ "$OS" = Darwin ] && ls -d /Applications/[Ee]mdash.app >/dev/null 2>&1; then ok "emdash"; return; fi
   if [ "$OS" = Linux ] && have emdash; then ok "emdash"; return; fi
   [ "$MODE" = status ] && { warn "emdash: MISSING (GUI app, optional)"; return; }
@@ -188,9 +194,9 @@ start_ollama() {
 }
 
 pull_models() {
-  [ "$PULL_MODELS" = 1 ] || return
-  have ollama || return
-  curl -s -m 2 -o /dev/null "http://localhost:$OLLAMA_PORT" || return
+  [ "$PULL_MODELS" = 1 ] || return 0
+  have ollama || return 0
+  curl -s -m 2 -o /dev/null "http://localhost:$OLLAMA_PORT" || return 0
   models="$(grep 'model: openai/' "$CONFIG" | grep -v '^[[:space:]]*#' | sed 's/.*openai\///; s/ *#.*//; s/ *$//' | sort -u)"
   for m in $models; do
     if ollama list | awk '{print $1}' | grep -qx "$m"; then
@@ -214,6 +220,82 @@ start_litellm() {
   wait_http "http://localhost:$LITELLM_PORT/v1/models" 30 && ok "litellm gateway up (:$LITELLM_PORT)" || warn "gateway did not come up — see state/litellm.log"
 }
 
+# ── global wiring (PATH + OpenCode base config) ───────────────────────────
+
+persist_path() {
+  line='export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH"'
+  for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
+    # only touch rc files that exist, plus the current shell's rc
+    case "$rc" in
+      *.zshrc)  [ -f "$rc" ] || [ "$(basename "${SHELL:-}")" = zsh ] || continue ;;
+      *.bashrc) [ -f "$rc" ] || [ "$(basename "${SHELL:-}")" = bash ] || continue ;;
+    esac
+    if [ -f "$rc" ] && grep -qF '.opencode/bin' "$rc"; then
+      ok "PATH already in $(basename "$rc")"
+    else
+      [ "$MODE" = status ] && { warn "PATH: .opencode/bin not in $(basename "$rc")"; continue; }
+      { echo ""; echo "# pipa_harness (opencode + uv tools)"; echo "$line"; } >> "$rc"
+      add "PATH added to $(basename "$rc") (open a new terminal to pick it up)"
+    fi
+  done
+}
+
+setup_global_opencode() {
+  gdir="$HOME/.config/opencode"
+  gcfg="$gdir/opencode.jsonc"
+  if [ -f "$gcfg" ] && grep -q "pipa" "$gcfg" 2>/dev/null; then
+    ok "global opencode config (~/.config/opencode)"
+  else
+    [ "$MODE" = status ] && { warn "global opencode config: MISSING"; }
+    if [ "$MODE" != status ]; then
+      mkdir -p "$gdir"
+      sed "s|@PIPA_ROOT@|$ROOT|g" "$ROOT/templates/global-opencode.jsonc" > "$gcfg"
+      add "wrote $gcfg (litellm provider + base rules)"
+    fi
+  fi
+  if [ -e "$gdir/agent" ]; then
+    ok "global opencode agents"
+  else
+    [ "$MODE" = status ] && { warn "global opencode agents: MISSING"; return; }
+    ln -s "$ROOT/agents" "$gdir/agent"
+    add "linked $gdir/agent -> $ROOT/agents"
+  fi
+}
+
+# ── project scaffold (.harness_extension) ─────────────────────────────────
+
+scaffold_project() {
+  target="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ "$target" = "$ROOT" ] && return 0          # inside pipa itself: no scaffold
+  ext="$target/.harness_extension"
+
+  if [ -d "$ext" ]; then
+    ok ".harness_extension/ exists ($target)"
+  else
+    [ "$MODE" = status ] && { warn "project not scaffolded: $target (run pipa-up here)"; return; }
+    add "scaffolding .harness_extension/ in $target"
+    mkdir -p "$ext"
+    (cd "$ROOT/templates/extension" && find . -type f ! -name opencode.jsonc | while read -r f; do
+      mkdir -p "$ext/$(dirname "$f")"
+      [ -e "$ext/$f" ] || cp "$f" "$ext/$f"
+    done)
+  fi
+
+  if [ ! -e "$target/AGENTS.md" ]; then
+    [ "$MODE" != status ] && { ln -s .harness_extension/AGENTS.md "$target/AGENTS.md"; add "AGENTS.md -> .harness_extension/AGENTS.md"; }
+  fi
+
+  mkdir -p "$target/.opencode"
+  if [ ! -e "$target/.opencode/opencode.jsonc" ] && [ "$MODE" != status ]; then
+    cp "$ROOT/templates/extension/opencode.jsonc" "$target/.opencode/opencode.jsonc"
+    add ".opencode/opencode.jsonc"
+  fi
+  if [ ! -e "$target/.opencode/agent" ] && [ "$MODE" != status ]; then
+    ln -s ../.harness_extension/agents "$target/.opencode/agent"
+    add ".opencode/agent -> .harness_extension/agents"
+  fi
+}
+
 # ── run ────────────────────────────────────────────────────────────────────
 
 say "pipa-up ($MODE) — $OS/$ARCH"
@@ -233,12 +315,17 @@ pull_models
 start_litellm
 
 say ""
+persist_path
+setup_global_opencode
+scaffold_project
+
+say ""
 if [ "$MODE" = status ]; then
   python3 "$ROOT/bin/harness_status.py" || true
 else
   say "Verifying..."
   python3 "$ROOT/bin/harness_status.py" || true
   say ""
-  say "Done. OpenCode: cd your-project && opencode"
+  say "Done. Open a NEW terminal (PATH updated), then: cd your-project && opencode"
   say "Logs: $STATE/litellm.log · $STATE/ollama.log    Stop: bin/pipa-up.sh --stop"
 fi

@@ -1,0 +1,64 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "litellm/primary",
+  "small_model": "litellm/fast",
+
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
+      "options": {
+        "baseURL": "http://localhost:4000/v1",
+        "apiKey": "sk-pipa-local"
+      },
+      "models": {
+        "primary": {},
+        "fast": {},
+        "deep": {},
+        "explore": {}
+      }
+    }
+  },
+
+  "instructions": [
+    "@PIPA_ROOT@/AGENTS.md",
+    "@PIPA_ROOT@/rules/*.md"
+  ],
+
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "ls *": "allow",
+      "cat *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "grep *": "allow",
+      "rg *": "allow",
+      "find *": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git branch*": "allow",
+      "graphify *": "allow",
+      "python3 @PIPA_ROOT@/bin/harness_status.py*": "allow",
+      "@PIPA_ROOT@/bin/pipa-up.sh*": "allow"
+    },
+    "graphify_*": "allow",
+    "context7_*": "allow",
+    "skill": { "*": "allow" }
+  },
+
+  "mcp": {
+    "context7": {
+      "type": "remote",
+      "url": "https://mcp.context7.com/mcp",
+      "enabled": true,
+      "timeout": 30000
+    }
+  },
+
+  "subagent_depth": 2,
+  "compaction": { "auto": true, "prune": false, "reserved": 10000 },
+  "watcher": { "ignore": ["node_modules/**", "dist/**", "build/**", ".git/**", "graphify-out/**"] }
+}
