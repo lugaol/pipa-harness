@@ -5,9 +5,17 @@
 
   "provider": {
     "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
       "options": {
         "baseURL": "http://localhost:4000/v1",
         "apiKey": "sk-pipa-local"
+      },
+      "models": {
+        "primary": {},
+        "fast": {},
+        "deep": {},
+        "explore": {}
       }
     }
   },

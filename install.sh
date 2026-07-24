@@ -52,6 +52,12 @@ for f in opencode.jsonc setup-script.sh run-script.sh; do
   fi
 done
 
+# 3b. .opencode/agent -> harness/agents (OpenCode subagent discovery)
+if [ ! -e "$TARGET/.opencode/agent" ]; then
+  echo "  + .opencode/agent -> ../harness/agents"
+  ln -s ../harness/agents "$TARGET/.opencode/agent"
+fi
+
 # 4. .graphifyignore if missing
 if [ ! -e "$TARGET/.graphifyignore" ]; then
   echo "  + .graphifyignore"

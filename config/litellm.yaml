@@ -13,14 +13,14 @@ model_list:
   # ── Primary coding model (OpenCode build agent, implementation) ──
   - model_name: primary
     litellm_params:
-      model: openai/gpt-oss-120b          # swap for anthropic/claude-sonnet-4-5 etc.
+      model: openai/gpt-oss:20b             # swap for anthropic/claude-sonnet-4-5 etc.
       api_base: http://localhost:11434/v1 # Ollama; or remove to use a cloud provider
       api_key: "ollama"                   # dummy key for local Ollama
 
   # ── Fast/cheap model (triage, titles, summaries, small tasks) ──
   - model_name: fast
     litellm_params:
-      model: openai/qwen2.5-coder:7b
+      model: openai/qwen3:8b              # tool-calling capable (qwen2.5-coder:7b is NOT in Ollama)
       api_base: http://localhost:11434/v1
       api_key: "ollama"
 
@@ -34,7 +34,7 @@ model_list:
   # ── Read-only exploration model (cheap, fast codebase Q&A) ──
   - model_name: explore
     litellm_params:
-      model: openai/qwen2.5-coder:7b
+      model: openai/qwen3:8b              # tool-calling capable; swap for a cloud model if available
       api_base: http://localhost:11434/v1
       api_key: "ollama"
 
