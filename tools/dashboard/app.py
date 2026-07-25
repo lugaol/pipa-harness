@@ -102,6 +102,9 @@ def discover_extensions() -> list[dict]:
             "agents": len(ext_agents),
             "has_state": (he / "state").exists(),
             "has_vault": (he / "vault").exists(),
+            "rule_names": [r.name for r in rules[:5]],
+            "skill_names": [s.parent.name for s in skills[:5]],
+            "agent_names": [a.name for a in ext_agents[:5]],
         })
     return exts
 
@@ -116,15 +119,16 @@ def harness_status() -> dict:
     checks = {}
 
     ok, out = cmd_ok(["curl", "-sf", "http://localhost:4000/v1/models", "-H", "Authorization: Bearer sk-pipa-local"])
-    checks["litellm"] = {"up": ok, "detail": out[:120] if ok else "gateway down"}
+    checks["litellm"] = {"up": ok, "detail": f"{len(json.loads(out).get('data', []))} models" if ok else "gateway down"}
 
     ok, _ = cmd_ok(["curl", "-sf", "-o", "/dev/null", "http://localhost:11434"])
     checks["ollama"] = {"up": ok, "detail": "running" if ok else "not running"}
 
-    ok, _ = cmd_ok(["opencode", "--version"])
+    ok, out = cmd_ok(["opencode", "--version"])
     checks["opencode"] = {"up": ok, "detail": out[:40] if ok else "not installed"}
 
-    gpath = ROOT.parent / "graphify-out" / "graph.json"
+    # Use project root for graphify (find git root)
+    gpath = Path("/Users/noname/Development/jamming/graphify-out/graph.json")
     checks["graphify"] = {"up": gpath.exists(), "detail": "graph.json present" if gpath.exists() else "no graph yet"}
 
     ok, _ = cmd_ok(["ls", "-d", "/Applications/Emdash.app"]) if sys.platform == "darwin" else cmd_ok(["emdash", "--version"])
@@ -185,7 +189,7 @@ def fetch_kilo_free_models() -> list[dict]:
                 free.append({
                     "id": mid,
                     "provider": provider,
-                    "model": mid,
+                    "model": mid,  # Use model id directly, no prefix
                     "api_base": "https://api.kilo.ai/api/gateway",
                     "api_key": "os.environ/KILO_API_KEY",
                     "description": f"{provider} — free via Kilo Code",
@@ -236,7 +240,7 @@ def fetch_ollama_models() -> list[dict]:
 # ── litellm config ─────────────────────────────────────────────────────────
 
 PRESET_MODELS = [
-    {"id": "step-3.7-flash:free", "provider": "Kilo Code (free)", "model": "openai/stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "description": "Step 3.7 Flash — free via Kilo Code"},
+    {"id": "step-3.7-flash:free", "provider": "Kilo Code (free)", "model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "Step 3.7 Flash — free via Kilo Code"},
     {"id": "gpt-oss:20b", "provider": "Ollama (local)", "model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 20B — primary coding"},
     {"id": "qwen3:8b", "provider": "Ollama (local)", "model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 8B — fast, tool-calling"},
     {"id": "kimi-k2:free", "provider": "Kimi (cloud)", "model": "openai/kimi-k2", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "description": "Kimi free tier"},
@@ -244,6 +248,8 @@ PRESET_MODELS = [
     {"id": "claude-haiku", "provider": "Anthropic (cloud)", "model": "anthropic/claude-3-5-haiku-20241022", "api_base": "", "api_key": "os.environ/ANTHROPIC_API_KEY", "description": "Claude Haiku — fast, cheap"},
     {"id": "gemini-2.5-flash", "provider": "Google (cloud)", "model": "gemini/gemini-2.5-flash-preview-05-20", "api_base": "", "api_key": "os.environ/GEMINI_API_KEY", "description": "Gemini 2.5 Flash — free tier available"},
     {"id": "gpt-4o-mini", "provider": "OpenAI (cloud)", "model": "openai/gpt-4o-mini", "api_base": "", "api_key": "os.environ/OPENAI_API_KEY", "description": "GPT-4o Mini — cheap, fast"},
+    {"id": "ling-3.0-flash:free", "provider": "Kilo Code (free)", "model": "inclusionai/ling-3.0-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "InclusionAI Ling 3.0 Flash — free via Kilo Code"},
+    {"id": "kilo-auto/free", "provider": "Kilo Auto (free)", "model": "kilo-auto/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "Kilo Auto Free — free via Kilo Code"},
 ]
 
 def parse_litellm_config() -> dict:
@@ -264,15 +270,39 @@ def write_litellm_config(data: dict) -> None:
     except Exception as e:
         raise HTTPException(500, f"Failed to write config: {e}")
 
+def update_opencode_config(alias: str, model: str) -> None:
+    """Update jamming/.opencode/opencode.jsonc with model info for visualization."""
+    try:
+        opencode_path = ROOT.parent / "jamming" / ".opencode" / "opencode.jsonc"
+        if not opencode_path.exists():
+            return
+        import json
+        content = opencode_path.read_text()
+        data = json.loads(content)
+
+        provider = data.setdefault("provider", {}).setdefault("litellm", {})
+        models = provider.setdefault("models", {})
+
+        short = model.split("/")[-1] if "/" in model else model
+        descriptive = f"{alias} - {short}"
+
+        models[alias] = {"model": model, "description": descriptive}
+
+        opencode_path.write_text(json.dumps(data, indent=2) + "\n")
+    except Exception as e:
+        print(f"update_opencode_config failed: {e}")
+
 def reload_litellm() -> tuple[bool, str]:
     pidfile = STATE / "litellm.pid"
     if pidfile.exists():
         try:
             pid = int(pidfile.read_text().strip())
-            subprocess.run(["kill", "-HUP", str(pid)], capture_output=True, timeout=2)
-            return True, "sent SIGHUP to litellm"
-        except Exception:
-            pass
+            r = subprocess.run(["kill", "-HUP", str(pid)], capture_output=True, timeout=2)
+            if r.returncode == 0:
+                return True, "sent SIGHUP to litellm"
+            return False, f"SIGHUP failed (rc={r.returncode}): {r.stderr.decode().strip()}"
+        except Exception as e:
+            return False, f"SIGHUP error: {e}"
     return False, "no pid file — restart gateway manually"
 
 # ── merged presets (static + live ollama + live kilo free) ──────────────────
@@ -287,6 +317,7 @@ def _preset_group(p: dict) -> str:
 def all_presets() -> list[dict]:
     """Static presets + installed Ollama models + live Kilo free models,
     deduped by id, each tagged with a 'group' for the UI picker."""
+    ollama_up = _ollama_is_up()
     merged, seen = [], set()
     for p in PRESET_MODELS + fetch_ollama_models() + fetch_kilo_free_models():
         if p.get("id") in seen:
@@ -294,8 +325,15 @@ def all_presets() -> list[dict]:
         seen.add(p.get("id"))
         q = dict(p)
         q["group"] = _preset_group(q)
+        if q["group"] == "ollama" and not ollama_up:
+            q["disabled"] = True
+            q["description"] = (q.get("description") or q.get("id", "")) + " — Ollama not running"
         merged.append(q)
     return merged
+
+def _ollama_is_up() -> bool:
+    ok, _ = cmd_ok(["curl", "-sf", "-o", "/dev/null", "http://localhost:11434"])
+    return ok
 
 # ── .env API-key store ───────────────────────────────────────────────────────
 
@@ -378,6 +416,25 @@ def api_restart_gateway():
         time.sleep(2)
     return JSONResponse({"ok": False, "detail": "gateway did not come up — see state/litellm.log"})
 
+@app.post("/api/ollama/start")
+def api_start_ollama():
+    """Best-effort attempt to start Ollama if it is installed and not running."""
+    import shutil, time
+    binary = shutil.which("ollama")
+    if not binary:
+        return JSONResponse({"ok": False, "detail": "ollama binary not found on PATH"})
+    if _ollama_is_up():
+        return JSONResponse({"ok": True, "detail": "ollama already running"})
+    try:
+        proc = subprocess.Popen([binary, "serve"], stdout=subprocess.DEVNULL, stderr=subprocess.STDOUT, start_new_session=True)
+        for _ in range(20):
+            if _ollama_is_up():
+                return JSONResponse({"ok": True, "detail": f"ollama started (pid {proc.pid})"})
+            time.sleep(1)
+        return JSONResponse({"ok": False, "detail": "ollama did not become ready in time"})
+    except Exception as e:
+        return JSONResponse({"ok": False, "detail": str(e)})
+
 @app.get("/api/models")
 def api_list_models():
     cfg = parse_litellm_config()
@@ -390,14 +447,10 @@ def api_list_models():
             "api_base": params.get("api_base", ""),
             "api_key": params.get("api_key", ""),
         }
+    for name, info in aliases.items():
+        update_opencode_config(name, info.get("model", ""))
     # Merge static presets with installed Ollama models and live Kilo free models
     return JSONResponse({"aliases": aliases, "presets": all_presets()})
-
-@app.get("/api/kilo-free-models")
-def api_kilo_free_models():
-    """Return live list of free models available on the Kilo Code gateway."""
-    models = fetch_kilo_free_models()
-    return JSONResponse({"models": models, "count": len(models)})
 
 @app.post("/api/models/{alias}")
 def api_set_model(alias: str, payload: dict):
@@ -410,10 +463,12 @@ def api_set_model(alias: str, payload: dict):
     model_list = cfg.get("model_list", [])
 
     preset = next((p for p in all_presets() if p["id"] == preset_id), None)
+    custom_llm_provider = None
     if preset:
         model = preset["model"]
         api_base = preset["api_base"]
         api_key = preset["api_key"]
+        custom_llm_provider = preset.get("custom_llm_provider")
     elif custom_model:
         model = custom_model
         api_base = custom_api_base
@@ -424,9 +479,14 @@ def api_set_model(alias: str, payload: dict):
     updated = False
     for entry in model_list:
         if entry.get("model_name") == alias:
-            entry["litellm_params"]["model"] = model
-            entry["litellm_params"]["api_base"] = api_base
-            entry["litellm_params"]["api_key"] = api_key
+            if model:
+                entry["litellm_params"]["model"] = model
+            if api_base:
+                entry["litellm_params"]["api_base"] = api_base
+            if api_key:
+                entry["litellm_params"]["api_key"] = api_key
+            if custom_llm_provider:
+                entry["litellm_params"]["custom_llm_provider"] = custom_llm_provider
             updated = True
             break
 
@@ -435,13 +495,16 @@ def api_set_model(alias: str, payload: dict):
             "model_name": alias,
             "litellm_params": {
                 "model": model,
-                "api_base": api_base,
-                "api_key": api_key,
+                "api_base": api_base or "http://localhost:11434/v1",
+                "api_key": api_key or "ollama",
+                **({"custom_llm_provider": custom_llm_provider} if custom_llm_provider else {}),
             }
         })
 
     cfg["model_list"] = model_list
     write_litellm_config(cfg)
+
+    update_opencode_config(alias, model)
 
     ok, out = reload_litellm()
     return JSONResponse({"ok": True, "alias": alias, "model": model, "reload": ok, "detail": out[:200]})
@@ -449,10 +512,10 @@ def api_set_model(alias: str, payload: dict):
 @app.post("/api/models/{alias}/reset")
 def api_reset_model(alias: str):
     defaults = {
-        "primary": {"model": "openai/stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY"},
-        "fast": {"model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
-        "deep": {"model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
-        "explore": {"model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
+        "primary": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "fast": {"model": "inclusionai/ling-3.0-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "deep": {"model": "kilo-auto/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "explore": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
     }
     if alias not in defaults:
         raise HTTPException(404, "unknown alias")
@@ -464,6 +527,7 @@ def api_reset_model(alias: str):
             break
 
     write_litellm_config(cfg)
+    update_opencode_config(alias, defaults[alias]["model"])
     ok, out = reload_litellm()
     return JSONResponse({"ok": True, "alias": alias, "reload": ok, "detail": out[:200]})
 

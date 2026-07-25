@@ -371,17 +371,18 @@ body::after {
    ═══════════════════════════════════════════════════════════ */
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: var(--sp-4);
 }
 
 .status-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-md);
-  padding: var(--sp-4);
-  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-5);
+  display: flex; align-items: center; gap: var(--sp-4);
   transition: all var(--duration-normal) var(--ease-out);
+  min-height: 72px;
 }
 .status-card:hover {
   border-color: var(--border-default);
@@ -420,18 +421,22 @@ body::after {
    ═══════════════════════════════════════════════════════════ */
 .models-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
-  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-4);
 }
 
 .model-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--sp-5);
+  padding: var(--sp-6);
   transition: all var(--duration-normal) var(--ease-out);
   position: relative;
   overflow: hidden;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-height: 220px;
 }
 .model-card::before {
   content: '';
@@ -615,16 +620,17 @@ body::after {
   ═══════════════════════════════════════════════════════════ */
 .extensions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
-  gap: var(--sp-3);
+  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  gap: var(--sp-4);
 }
 
 .extension-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--sp-4);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
   transition: all var(--duration-normal) var(--ease-out);
+  min-height: 140px;
 }
 .extension-card:hover {
   border-color: var(--border-default);
@@ -914,10 +920,6 @@ body::after {
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
         API Keys
       </button>
-      <button class="nav-item" data-section="free-models" onclick="scrollToSection('free-models-section')">
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
-        Free Models
-      </button>
       <button class="nav-item" data-section="agents" onclick="scrollToSection('agents-section')">
         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
         Agents
@@ -1007,24 +1009,6 @@ body::after {
       </div>
     </section>
 
-    <!-- ═══════════════════════════════════════════════════
-         FREE MODELS FROM KILO GATEWAY
-         ═══════════════════════════════════════════════════ -->
-    <section id="free-models-section">
-      <div class="card-header">
-        <h3>Free Models — Kilo Gateway</h3>
-        <div class="flex gap-2 items-center">
-          <span class="text-xs text-muted mono" id="free-models-count">0 available</span>
-          <button class="btn btn-ghost btn-sm" onclick="refreshFreeModels()">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
-            Refresh
-          </button>
-        </div>
-      </div>
-      <div class="models-grid" id="free-models-grid" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
-        <!-- Populated by JS -->
-      </div>
-    </section>
 
     <!-- ═══════════════════════════════════════════════════
          AGENTS SECTION
@@ -1215,13 +1199,18 @@ async function renderStatus() {
 
       const card = document.createElement('div');
       card.className = 'status-card';
+      let actionHtml = '';
+      if (name === 'ollama' && !info.up) {
+        actionHtml = `<button class="btn btn-primary btn-sm" onclick="startOllama()">Start Ollama</button>`;
+      }
       card.innerHTML = `
         <div class="status-card-icon ${iconClass}">${iconSvg}</div>
         <div class="status-card-body">
           <div class="status-card-name">${name}</div>
-          <div class="status-card-detail">${escapeHtml(info.detail || '')}</div>
+          <div class="status-card-detail">${escapeHtml((info.detail || '').slice(0, 120))}</div>
         </div>
         <div class="status-card-dot ${info.up ? 'ok' : 'fail'}"></div>
+        ${actionHtml}
       `;
       grid.appendChild(card);
     }
@@ -1255,6 +1244,12 @@ async function renderModels() {
 
     const aliases = data.aliases || {};
     const presets = data.presets || [];
+    window.__modelPresets = presets;
+
+    const hasOllama = presets.some(p => p.group === 'ollama' && !p.disabled);
+    const pickerLabel = hasOllama
+      ? 'Pick a model (Kilo free · Ollama · Kimi)'
+      : 'Pick a model (Kilo free · Kimi · other)';
 
     // Group presets by provider for a clean picker: Kilo free / Ollama / Kimi / other
     const groupLabels = { kilo: 'Kilo Code — free', ollama: 'Ollama — local', kimi: 'Kimi — cloud', other: 'Other presets' };
@@ -1267,7 +1262,7 @@ async function renderModels() {
       .filter(([g]) => grouped[g] && grouped[g].length)
       .map(([g, label]) =>
         `<optgroup label="${escapeAttr(label)}">${grouped[g].map(p =>
-          `<option value="${escapeAttr(p.id)}">${escapeHtml(p.id)}</option>`).join('')}</optgroup>`)
+          `<option value="${escapeAttr(p.id)}" ${p.disabled ? 'disabled' : ''} data-model="${escapeAttr(p.model || '')}">${escapeHtml(p.description || p.id)}${p.disabled ? ' (unavailable)' : ''}</option>`).join('')}</optgroup>`)
       .join('');
 
     if (!Object.keys(aliases).length) {
@@ -1279,6 +1274,8 @@ async function renderModels() {
       const provider = detectProvider(info.api_base || '', info.api_key || '');
       const card = document.createElement('div');
       card.className = 'model-card';
+      card.dataset.apiBase = info.api_base || '';
+      card.dataset.apiKey = info.api_key || '';
       card.innerHTML = `
         <div class="model-card-header">
           <div>
@@ -1286,25 +1283,18 @@ async function renderModels() {
             <span class="model-provider-badge ${provider.badgeClass}">${provider.name}</span>
           </div>
         </div>
-        <div class="model-current">${escapeHtml(info.model || '—')}</div>
+        <div class="model-current">${escapeHtml(alias)} - ${escapeHtml((info.model || '—').split('/').pop())}</div>
         <div class="model-api-base">
           <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
           ${escapeHtml(info.api_base || 'local')}
         </div>
         <div class="model-actions">
           <div class="model-select-row">
-            <select id="preset-${alias}" aria-label="Select preset for ${alias}">
-              <option value="">— Pick a model (Kilo free · Ollama · Kimi) —</option>
+            <select id="preset-${alias}" aria-label="Select model for ${alias}">
+              <option value="">${escapeHtml(pickerLabel)}</option>
               ${presetOptions}
             </select>
-            <button class="btn btn-secondary btn-sm" onclick="applyPreset('${escapeAttr(alias)}')">Apply</button>
-          </div>
-          <div class="model-custom-row">
-            <input id="custom-${alias}" placeholder="model (e.g. openai/gpt-4o)" aria-label="Custom model for ${alias}">
-            <button class="btn btn-primary btn-sm" onclick="applyCustom('${escapeAttr(alias)}')">Save</button>
-          </div>
-          <div class="flex gap-2 mt-1">
-            <button class="btn btn-ghost btn-sm" onclick="resetModel('${escapeAttr(alias)}')">Reset default</button>
+            <button class="btn btn-primary btn-sm" onclick="saveModel('${escapeAttr(alias)}')">Save</button>
           </div>
         </div>
       `;
@@ -1326,77 +1316,6 @@ function detectProvider(apiBase, apiKey) {
   if (b.includes('openai')) return { name: 'OpenAI', badgeClass: 'cloud' };
   if (b.includes('localhost') || b.includes('11434')) return { name: 'Ollama Local', badgeClass: 'local' };
   return { name: 'Cloud', badgeClass: 'cloud' };
-}
-
-/* ═══════════════════════════════════════════════════════════
-   RENDER: FREE MODELS FROM KILO GATEWAY
-   ═══════════════════════════════════════════════════════════ */
-async function renderFreeModels() {
-  try {
-    const data = await apiGet('/kilo-free-models');
-    const grid = document.getElementById('free-models-grid');
-    const countEl = document.getElementById('free-models-count');
-    grid.innerHTML = '';
-
-    const models = data.models || [];
-    countEl.textContent = `${models.length} available`;
-
-    if (!models.length) {
-      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>No free models available — check gateway connection</p></div>';
-      return;
-    }
-
-    for (const m of models) {
-      const card = document.createElement('div');
-      card.className = 'model-card';
-      card.style.borderColor = 'rgba(34,197,94,0.15)';
-      card.innerHTML = `
-        <div class="model-card-header">
-          <div style="min-width:0">
-            <div class="model-alias" style="font-size:13px">${escapeHtml(m.id)}</div>
-            <span class="model-provider-badge free" style="margin-top:4px">Free · ${escapeHtml(m.provider)}</span>
-          </div>
-        </div>
-        <div class="model-actions">
-          <div class="model-select-row">
-            <select id="free-preset-target" aria-label="Target alias">
-              <option value="">— assign to alias —</option>
-              <option value="primary">primary</option>
-              <option value="fast">fast</option>
-              <option value="deep">deep</option>
-              <option value="explore">explore</option>
-            </select>
-          </div>
-          <button class="btn btn-success btn-sm" onclick="applyFreeModel('${escapeAttr(m.id)}', this)" style="width:100%">
-            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-            Assign to alias
-          </button>
-        </div>
-      `;
-      grid.appendChild(card);
-    }
-  } catch (e) {
-    console.error('Free models fetch failed:', e);
-    const grid = document.getElementById('free-models-grid');
-    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p style="color:var(--accent-red)">Failed to fetch free models</p></div>';
-  }
-}
-
-async function applyFreeModel(modelId, btnEl) {
-  const card = btnEl.closest('.model-card');
-  const sel = card.querySelector('#free-preset-target');
-  const alias = sel.value;
-  if (!alias) { toast('Select a target alias first', 'error'); return; }
-  try {
-    const r = await apiPost(`/models/${encodeURIComponent(alias)}`, { model: `openai/${modelId}`, api_base: 'https://api.kilo.ai/api/gateway', api_key: 'os.environ/KILO_API_KEY' });
-    if (r.ok) { toast(`Assigned ${modelId} → ${alias}`, 'success'); renderModels(); renderFreeModels(); }
-    else { toast(r.detail || 'Failed to assign', 'error'); }
-  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
-}
-
-async function refreshFreeModels() {
-  await renderFreeModels();
-  toast('Free models refreshed', 'success');
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1580,23 +1499,13 @@ async function renderTools() {
 /* ═══════════════════════════════════════════════════════════
    ACTIONS
    ═══════════════════════════════════════════════════════════ */
-async function applyPreset(alias) {
+async function saveModel(alias) {
   const sel = document.getElementById(`preset-${alias}`);
   const presetId = sel.value;
-  if (!presetId) { toast('Select a preset first', 'error'); return; }
+  if (!presetId) { toast('Select a model first', 'error'); return; }
   try {
     const r = await apiPost(`/models/${encodeURIComponent(alias)}`, { preset_id: presetId });
-    if (r.ok) { toast(`Updated ${alias} → ${r.model}`, 'success'); renderModels(); }
-    else { toast(r.detail || 'Update failed', 'error'); }
-  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
-}
-
-async function applyCustom(alias) {
-  const model = document.getElementById(`custom-${alias}`).value.trim();
-  if (!model) { toast('Model ID is required', 'error'); return; }
-  try {
-    const r = await apiPost(`/models/${encodeURIComponent(alias)}`, { model });
-    if (r.ok) { toast(`Updated ${alias} → ${model}`, 'success'); renderModels(); }
+    if (r.ok) { toast(`Updated ${alias} → ${(r.model || '').split('/').pop() || presetId}`, 'success'); renderModels(); }
     else { toast(r.detail || 'Update failed', 'error'); }
   } catch (e) { toast('Request failed: ' + e.message, 'error'); }
 }
@@ -1652,6 +1561,19 @@ async function restartGateway() {
   );
 }
 
+async function startOllama() {
+  showModal('Start Ollama',
+    '<p>Start the local Ollama daemon on <code class="mono">localhost:11434</code>?</p>',
+    async () => {
+      try {
+        const r = await apiPost('/ollama/start', {});
+        if (r.ok) { toast(r.detail || 'Ollama started', 'success'); setTimeout(renderStatus, 2000); }
+        else { toast(r.detail || 'Start failed', 'error'); }
+      } catch (e) { toast('Request failed: ' + e.message, 'error'); }
+    }
+  );
+}
+
 async function refreshAll() {
   await Promise.all([renderStatus(), renderEnvKeys(), renderModels(), renderAgents(), renderExtensions(), renderTools()]);
   toast('Dashboard refreshed', 'success');
@@ -1685,7 +1607,7 @@ function initNavObserver() {
     });
   }, { threshold: 0.3, rootMargin: '-80px 0px -60% 0px' });
 
-  ['status-section', 'keys-section', 'models-section', 'free-models-section', 'agents-section', 'extensions-section', 'tools-section'].forEach(id => {
+  ['status-section', 'keys-section', 'models-section', 'agents-section', 'extensions-section', 'tools-section'].forEach(id => {
     const el = document.getElementById(id);
     if (el) observer.observe(el);
   });
@@ -1702,7 +1624,6 @@ async function init() {
     renderStatus(),
     renderEnvKeys(),
     renderModels(),
-    renderFreeModels(),
     renderAgents(),
     renderExtensions(),
     renderTools()
