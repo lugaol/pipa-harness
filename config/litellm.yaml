@@ -13,9 +13,9 @@ model_list:
   # ── Primary coding model (OpenCode build agent, implementation) ──
   - model_name: primary
     litellm_params:
-      model: openai/gpt-oss:20b             # swap for anthropic/claude-sonnet-4-5 etc.
-      api_base: http://localhost:11434/v1 # Ollama; or remove to use a cloud provider
-      api_key: "ollama"                   # dummy key for local Ollama
+      model: openai/stepfun/step-3.7-flash:free
+      api_base: https://api.stepfun.com/v1
+      api_key: os.environ/STEPFUN_API_KEY
 
   # ── Fast/cheap model (triage, titles, summaries, small tasks) ──
   - model_name: fast

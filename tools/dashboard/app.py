@@ -145,6 +145,7 @@ def tools_status() -> dict:
 # ── litellm config ─────────────────────────────────────────────────────────
 
 PRESET_MODELS = [
+    {"id": "step-3.7-flash:free", "provider": "StepFun (cloud)", "model": "openai/stepfun/step-3.7-flash:free", "api_base": "https://api.stepfun.com/v1", "api_key": "os.environ/STEPFUN_API_KEY", "description": "Step 3.7 Flash — free tier"},
     {"id": "gpt-oss:20b", "provider": "Ollama (local)", "model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 20B — primary coding"},
     {"id": "qwen3:8b", "provider": "Ollama (local)", "model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 8B — fast, tool-calling"},
     {"id": "kimi-k2:free", "provider": "Kimi (cloud)", "model": "openai/kimi-k2", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "description": "Kimi free tier"},
@@ -267,7 +268,7 @@ def api_set_model(alias: str, payload: dict):
 @app.post("/api/models/{alias}/reset")
 def api_reset_model(alias: str):
     defaults = {
-        "primary": {"model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
+        "primary": {"model": "openai/stepfun/step-3.7-flash:free", "api_base": "https://api.stepfun.com/v1", "api_key": "os.environ/STEPFUN_API_KEY"},
         "fast": {"model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
         "deep": {"model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
         "explore": {"model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
