@@ -44,10 +44,11 @@ for arg in "$@"; do
 done
 
 # extra PATH locations where installers drop binaries
-export PATH="$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
+export PATH="$ROOT/bin:$HOME/.local/bin:$HOME/.opencode/bin:$PATH"
 
 OS="$(uname -s)"            # Darwin | Linux
 ARCH="$(uname -m)"          # arm64 | x86_64
+DASHBOARD_STARTED=0
 
 say()  { printf '%s\n' "$*"; }
 ok()   { say "  [ok] $*"; }
@@ -69,6 +70,7 @@ if [ "$MODE" = "stop" ]; then
   say "Stopping pipa services..."
   [ -f "$STATE/litellm.pid" ] && kill "$(cat "$STATE/litellm.pid")" 2>/dev/null && rm -f "$STATE/litellm.pid" && ok "litellm stopped"
   [ -f "$STATE/ollama.pid" ] && kill "$(cat "$STATE/ollama.pid")" 2>/dev/null && rm -f "$STATE/ollama.pid" && ok "ollama stopped (only the instance started by pipa-up)"
+  [ -f "$STATE/dashboard.pid" ] && kill "$(cat "$STATE/dashboard.pid")" 2>/dev/null && rm -f "$STATE/dashboard.pid" && ok "dashboard stopped"
   exit 0
 fi
 
@@ -182,6 +184,52 @@ ensure_emdash() {
   fi
 }
 
+ensure_dashboard() {
+  if [ "$MODE" = status ]; then
+    if [ -f "$STATE/dashboard.pid" ] && kill -0 "$(cat "$STATE/dashboard.pid")" 2>/dev/null; then
+      ok "dashboard (:8080)"
+    else
+      warn "dashboard: not running (:8080)"
+    fi
+    return
+  fi
+  if [ -f "$STATE/dashboard.pid" ] && kill -0 "$(cat "$STATE/dashboard.pid")" 2>/dev/null; then
+    ok "dashboard already running (:8080)"
+    return
+  fi
+  add "starting dashboard (:8080)..."
+  mkdir -p "$STATE"
+  nohup python3 "$ROOT/tools/dashboard/app.py" > "$STATE/dashboard.log" 2>&1 &
+  echo $! > "$STATE/dashboard.pid"
+  sleep 1
+  if kill -0 "$(cat "$STATE/dashboard.pid")" 2>/dev/null; then
+    ok "dashboard up (http://localhost:8080)"
+    DASHBOARD_STARTED=1
+  else
+    warn "dashboard failed to start — see $STATE/dashboard.log"
+  fi
+}
+
+open_browser() {
+  [ "$MODE" = status ] && return 0
+  [ "$DASHBOARD_STARTED" != 1 ] && return 0
+  url="http://localhost:8080"
+  if [ "$OS" = Darwin ]; then
+    open -a "Google Chrome" "$url" 2>/dev/null || open "$url"
+    return 0
+  fi
+  if [ "$OS" = Linux ]; then
+    if have google-chrome; then
+      google-chrome "$url" >/dev/null 2>&1 || xdg-open "$url" >/dev/null 2>&1
+    elif have chromium-browser; then
+      chromium-browser "$url" >/dev/null 2>&1 || xdg-open "$url" >/dev/null 2>&1
+    else
+      xdg-open "$url" >/dev/null 2>&1
+    fi
+    return 0
+  fi
+}
+
 # ── services ───────────────────────────────────────────────────────────────
 
 start_ollama() {
@@ -223,18 +271,18 @@ start_litellm() {
 # ── global wiring (PATH + OpenCode base config) ───────────────────────────
 
 persist_path() {
-  line='export PATH="$HOME/.opencode/bin:$HOME/.local/bin:$PATH"'
+  line='export PATH="'$ROOT'/bin:$HOME/.opencode/bin:$HOME/.local/bin:$PATH"'
   for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
     # only touch rc files that exist, plus the current shell's rc
     case "$rc" in
       *.zshrc)  [ -f "$rc" ] || [ "$(basename "${SHELL:-}")" = zsh ] || continue ;;
       *.bashrc) [ -f "$rc" ] || [ "$(basename "${SHELL:-}")" = bash ] || continue ;;
     esac
-    if [ -f "$rc" ] && grep -qF '.opencode/bin' "$rc"; then
+    if [ -f "$rc" ] && grep -qF "$ROOT/bin" "$rc"; then
       ok "PATH already in $(basename "$rc")"
     else
-      [ "$MODE" = status ] && { warn "PATH: .opencode/bin not in $(basename "$rc")"; continue; }
-      { echo ""; echo "# pipa_harness (opencode + uv tools)"; echo "$line"; } >> "$rc"
+      [ "$MODE" = status ] && { warn "PATH: $ROOT/bin not in $(basename "$rc")"; continue; }
+      { echo ""; echo "# pipa_harness (pipa-up + opencode + uv tools)"; echo "$line"; } >> "$rc"
       add "PATH added to $(basename "$rc") (open a new terminal to pick it up)"
     fi
   done
@@ -308,6 +356,8 @@ ensure_graphify
 ensure_opencode
 ensure_obsidian
 ensure_emdash
+ensure_dashboard
+open_browser
 
 say ""
 start_ollama
@@ -326,6 +376,8 @@ else
   say "Verifying..."
   python3 "$ROOT/bin/harness_status.py" || true
   say ""
-  say "Done. Open a NEW terminal (PATH updated), then: cd your-project && opencode"
-  say "Logs: $STATE/litellm.log · $STATE/ollama.log    Stop: bin/pipa-up.sh --stop"
+  say "Done."
+  [ "$DASHBOARD_STARTED" = 1 ] && say "  Dashboard: http://localhost:8080 (opened in browser)"
+  say "  Next: open a NEW terminal (PATH updated), then: cd your-project && opencode"
+  say "  Logs: $STATE/litellm.log · $STATE/ollama.log    Stop: bin/pipa-up.sh --stop"
 fi

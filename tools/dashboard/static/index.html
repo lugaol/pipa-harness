@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>pipa_harness dashboard</title>
+<style>
+  :root {
+    --bg: #0b0d12;
+    --panel: #11151c;
+    --panel-2: #161b24;
+    --border: #21262e;
+    --text: #e6edf3;
+    --muted: #8b949e;
+    --green: #3fb950;
+    --red: #f85149;
+    --yellow: #d29922;
+    --blue: #58a6ff;
+    --purple: #bc8cff;
+    --orange: #f0883e;
+  }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
+    background: var(--bg);
+    color: var(--text);
+    line-height: 1.5;
+  }
+  header {
+    padding: 20px 24px;
+    border-bottom: 1px solid var(--border);
+    background: var(--panel);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+  }
+  header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
+  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
+  .header-actions { display: flex; gap: 8px; }
+  main { padding: 20px 24px; display: grid; gap: 20px; }
+  section {
+    background: var(--panel);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 16px;
+  }
+  section h2 {
+    margin: 0 0 12px;
+    font-size: 13px;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+    color: var(--muted);
+    font-weight: 600;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+  }
+  .grid { display: grid; gap: 10px; }
+  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
+  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
+  .grid-4 { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
+  .card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 10px;
+  }
+  .card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
+  .card .value { font-size: 14px; font-weight: 600; margin-top: 2px; }
+  .dot {
+    width: 8px; height: 8px; border-radius: 50%;
+    display: inline-block; margin-right: 6px;
+  }
+  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
+  .dot.fail { background: var(--red); box-shadow: 0 0 6px var(--red); }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td {
+    text-align: left;
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    vertical-align: top;
+  }
+  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
+  tr:last-child td { border-bottom: none; }
+  .muted { color: var(--muted); }
+  select, input, button {
+    background: var(--panel-2);
+    color: var(--text);
+    border: 1px solid var(--border);
+    border-radius: 6px;
+    padding: 6px 10px;
+    font-size: 13px;
+    cursor: pointer;
+  }
+  input { font-family: monospace; }
+  button { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 500; }
+  button:hover { filter: brightness(1.1); }
+  button.secondary { background: var(--panel-2); border-color: var(--border); color: var(--text); }
+  button.danger { background: var(--red); border-color: var(--red); }
+  button.success { background: var(--green); border-color: var(--green); }
+  .tag {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    background: rgba(88,166,255,0.15);
+    color: var(--blue);
+    border: 1px solid rgba(88,166,255,0.3);
+  }
+  .tag.green { background: rgba(63,185,80,0.15); color: var(--green); border-color: rgba(63,185,80,0.3); }
+  .tag.orange { background: rgba(240,136,62,0.15); color: var(--orange); border-color: rgba(240,136,62,0.3); }
+  .toast {
+    position: fixed;
+    bottom: 20px;
+    right: 20px;
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    color: var(--text);
+    padding: 10px 14px;
+    border-radius: 8px;
+    font-size: 13px;
+    opacity: 0;
+    transition: opacity 0.2s;
+    pointer-events: none;
+    z-index: 1000;
+  }
+  .toast.show { opacity: 1; }
+  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
+  .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
+  .model-card {
+    background: var(--panel-2);
+    border: 1px solid var(--border);
+    border-radius: 8px;
+    padding: 12px;
+    flex: 1;
+    min-width: 240px;
+  }
+  .model-card .header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+  }
+  .model-card .name { font-weight: 600; font-size: 14px; }
+  .model-card .alias { font-size: 12px; color: var(--muted); }
+  .model-card .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
+  .section-divider {
+    border: none;
+    border-top: 1px solid var(--border);
+    margin: 16px 0;
+  }
+  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+</style>
+</head>
+<body>
+<header>
+  <div>
+    <h1>pipa_harness dashboard</h1>
+    <p id="clock"></p>
+  </div>
+  <div class="header-actions">
+    <button class="secondary" onclick="refreshAll()">Refresh</button>
+  </div>
+</header>
+<main>
+  <section>
+    <h2>Harness status</h2>
+    <div class="grid grid-3" id="status"></div>
+  </section>
+
+  <section>
+    <h2>LLMs <span class="tag green">config/litellm.yaml</span> <button class="secondary" onclick="restartGateway()" style="font-size:11px;padding:4px 8px">Restart gateway</button></h2>
+    <div id="models"></div>
+  </section>
+
+  <section>
+    <h2>Extensions</h2>
+    <div class="grid grid-2" id="extensions"></div>
+  </section>
+
+  <section>
+    <h2>Agents</h2>
+    <table>
+      <thead>
+        <tr>
+          <th>Name</th>
+          <th>Path</th>
+          <th>Description</th>
+          <th>Mode</th>
+          <th>Model</th>
+          <th></th>
+        </tr>
+      </thead>
+      <tbody id="agents"></tbody>
+    </table>
+  </section>
+
+  <section>
+    <h2>Tools</h2>
+    <div class="grid grid-2" id="tools"></div>
+  </section>
+</main>
+<div class="toast" id="toast"></div>
+
+<script>
+const API = "/api";
+
+function $(id) { return document.getElementById(id); }
+function toast(msg, isError) {
+  const t = $("toast");
+  t.textContent = msg;
+  t.style.borderColor = isError ? "var(--red)" : "var(--green)";
+  t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+async function get(path) {
+  const r = await fetch(`${API}${path}`);
+  if (!r.ok) throw new Error(r.statusText);
+  return r.json();
+}
+async function post(path, body) {
+  const r = await fetch(`${API}${path}`, {
+    method: "POST",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+async function renderStatus() {
+  const data = await get("/status");
+  const el = $("status");
+  el.innerHTML = "";
+  for (const [name, info] of Object.entries(data)) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div>
+        <div class="label">${name}</div>
+        <div class="value muted">${info.detail || ""}</div>
+      </div>
+      <div><span class="dot ${info.up ? "ok" : "fail"}"></span>${info.up ? "up" : "down"}</div>
+    `;
+    el.appendChild(card);
+  }
+}
+
+async function renderModels() {
+  const data = await get("/models");
+  const el = $("models");
+  el.innerHTML = "";
+  const aliases = data.aliases || {};
+  const presets = data.presets || [];
+
+  const cards = document.createElement("div");
+  cards.className = "grid grid-4";
+
+  for (const [alias, info] of Object.entries(aliases)) {
+    const card = document.createElement("div");
+    card.className = "model-card";
+    const provider = (info.api_base || "").includes("anthropic") ? "Anthropic" :
+                     (info.api_base || "").includes("moonshot") ? "Kimi" :
+                     (info.api_base || "").includes("google") ? "Google" :
+                     (info.api_base || "").includes("openai") ? "OpenAI" :
+                     info.api_base ? "Cloud" : "Ollama (local)";
+    card.innerHTML = `
+      <div class="header">
+        <div>
+          <div class="name">${alias}</div>
+          <div class="alias">${info.model || "—"}</div>
+        </div>
+        <span class="tag ${provider === "Ollama (local)" ? "green" : "orange"}">${provider}</span>
+      </div>
+      <div class="meta">${info.api_base || "local ollama"}</div>
+      <div class="meta" style="margin-top:4px;font-family:monospace;font-size:11px;color:var(--muted)">${info.api_key || ""}</div>
+      <hr class="section-divider">
+      <div class="row">
+        <select id="preset-${alias}">
+          <option value="">— preset —</option>
+          ${presets.map(p => `<option value="${p.id}">${p.provider}: ${p.id}</option>`).join("")}
+        </select>
+        <button onclick="applyPreset('${alias}')">Apply</button>
+      </div>
+      <div class="row" style="margin-top:8px">
+        <input id="custom-${alias}" placeholder="custom model (e.g. openai/gpt-4o)" style="flex:1">
+        <input id="base-${alias}" placeholder="api_base" value="${info.api_base || ""}" style="flex:1">
+        <input id="key-${alias}" placeholder="api_key" value="${info.api_key || ""}" style="flex:1">
+      </div>
+      <div class="row" style="margin-top:8px">
+        <button onclick="applyCustom('${alias}')">Save custom</button>
+        <button class="secondary" onclick="resetModel('${alias}')">Reset default</button>
+      </div>
+    `;
+    cards.appendChild(card);
+  }
+  el.appendChild(cards);
+
+  if (!Object.keys(aliases).length) {
+    el.innerHTML = `<div class="empty">No models configured in ${API}/models</div>`;
+  } else {
+    const hint = document.createElement("div");
+    hint.className = "empty";
+    hint.style.marginTop = "8px";
+    hint.textContent = "Tip: after changing a model, restart the LiteLLM gateway for changes to take effect.";
+    el.appendChild(hint);
+  }
+}
+
+async function applyPreset(alias) {
+  const sel = $(`preset-${alias}`);
+  const presetId = sel.value;
+  if (!presetId) { toast("select a preset", true); return; }
+  const r = await post(`/models/${encodeURIComponent(alias)}`, { preset_id: presetId });
+  if (r.ok) { toast(`Updated ${alias} → ${r.model}`); renderModels(); }
+  else { toast("update failed: " + (r.detail || ""), true); }
+}
+
+async function applyCustom(alias) {
+  const model = $(`custom-${alias}`).value.trim();
+  const api_base = $(`base-${alias}`).value.trim();
+  const api_key = $(`key-${alias}`).value.trim();
+  if (!model) { toast("model required", true); return; }
+  const r = await post(`/models/${encodeURIComponent(alias)}`, { model, api_base, api_key });
+  if (r.ok) { toast(`Updated ${alias} → ${model}`); renderModels(); }
+  else { toast("update failed: " + (r.detail || ""), true); }
+}
+
+async function resetModel(alias) {
+  if (!confirm(`Reset ${alias} to default local ollama model?`)) return;
+  const r = await post(`/models/${encodeURIComponent(alias)}/reset`, {});
+  if (r.ok) { toast(`Reset ${alias} to default`); renderModels(); }
+  else { toast("reset failed", true); }
+}
+
+async function restartGateway() {
+  if (!confirm("Restart LiteLLM gateway? This will briefly interrupt active sessions.")) return;
+  const r = await post(`/gateway/restart`, {});
+  if (r.ok) { toast(r.detail || "gateway stopped — run pipa-up.sh to restart"); }
+  else { toast("restart failed: " + (r.detail || ""), true); }
+}
+
+async function renderExtensions() {
+  const data = await get("/extensions");
+  const el = $("extensions");
+  el.innerHTML = "";
+  if (!data.length) {
+    el.innerHTML = `<div class="empty">No .harness_extension/ projects found</div>`;
+    return;
+  }
+  for (const ext of data) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div>
+        <div class="value">${ext.project}</div>
+        <div class="muted" style="margin-top:4px">
+          ${ext.rules} rules · ${ext.skills} skills · ${ext.agents} agents
+          ${ext.has_state ? "· state" : ""} ${ext.has_vault ? "· vault" : ""}
+        </div>
+        <div class="muted" style="font-size:11px;margin-top:4px">${ext.path}</div>
+      </div>
+    `;
+    el.appendChild(card);
+  }
+}
+
+async function renderAgents() {
+  const agents = await get("/agents");
+  const tbody = $("agents");
+  tbody.innerHTML = "";
+  for (const a of agents) {
+    const currentModel = a.model || "—";
+    const tr = document.createElement("tr");
+    tr.innerHTML = `
+      <td><strong>${a.name || a.path}</strong></td>
+      <td class="muted">${a.path}</td>
+      <td class="muted">${a.description || ""}</td>
+      <td><span class="tag">${a.mode || "—"}</span></td>
+      <td>
+        <select id="sel-${a.path.replace(/[^a-zA-Z0-9]/g, "_")}" data-path="${a.path}">
+          <option value="">— default —</option>
+          ${["litellm/primary","litellm/fast","litellm/deep","litellm/explore"].map(m => `<option value="${m}" ${currentModel === m ? "selected" : ""}>${m}</option>`).join("")}
+        </select>
+        <div class="muted" style="font-size:11px;margin-top:4px">file: ${currentModel}</div>
+      </td>
+      <td style="text-align:right"><button onclick="saveAgent('${a.path.replace(/'/g, "\\'")}')">Save</button></td>
+    `;
+    tbody.appendChild(tr);
+  }
+}
+
+async function saveAgent(path) {
+  const sel = document.querySelector(`select[data-path="${path}"]`);
+  const model = sel.value;
+  const r = await fetch(`/api/agent-file/${encodeURIComponent(path)}`, {
+    method: "PUT",
+    headers: {"Content-Type": "application/json"},
+    body: JSON.stringify({ model })
+  });
+  if (!r.ok) { toast("save failed", true); return; }
+  toast(`Saved ${path} → ${model || "default"}`);
+  renderAgents();
+}
+
+async function renderTools() {
+  const data = await get("/tools");
+  const el = $("tools");
+  el.innerHTML = "";
+  for (const t of data.pipa_tools) {
+    const card = document.createElement("div");
+    card.className = "card";
+    card.innerHTML = `
+      <div>
+        <div class="value">${t.name}</div>
+        <div class="muted" style="font-size:11px;margin-top:4px">${t.path}</div>
+      </div>
+      <div><span class="tag">${t.exec ? "exec" : "static"}</span></div>
+    `;
+    el.appendChild(card);
+  }
+}
+
+function tick() {
+  const now = new Date();
+  $("clock").textContent = `Local · ${now.toLocaleString()}`;
+}
+
+async function refreshAll() {
+  await Promise.all([renderStatus(), renderModels(), renderExtensions(), renderAgents(), renderTools()]);
+  toast("refreshed");
+}
+
+(async function init() {
+  tick();
+  setInterval(tick, 1000);
+  await Promise.all([renderStatus(), renderModels(), renderExtensions(), renderAgents(), renderTools()]);
+  setInterval(renderStatus, 5000);
+})();
+</script>
+</body>
+</html>

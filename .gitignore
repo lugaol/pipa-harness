@@ -3,6 +3,8 @@ graphify-out/
 *.local.*
 state/*.local.md
 state/scratch/
+state/*.pid
+state/*.log
 
 # extension machinery (local merges stay local)
 .pipa-extensions/
