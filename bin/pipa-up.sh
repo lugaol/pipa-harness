@@ -342,6 +342,12 @@ scaffold_project() {
     ln -s ../.harness_extension/agents "$target/.opencode/agent"
     add ".opencode/agent -> .harness_extension/agents"
   fi
+
+  if [ ! -e "$target/pipa-up" ] && [ "$MODE" != status ]; then
+    cp "$ROOT/templates/extension/pipa-up" "$target/pipa-up"
+    chmod +x "$target/pipa-up"
+    add "pipa-up -> project root"
+  fi
 }
 
 # ── run ────────────────────────────────────────────────────────────────────

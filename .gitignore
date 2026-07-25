@@ -1,3 +1,7 @@
+# Kilo Code state / registry (generated)
+.kilo/
+.kilocode/
+
 # pipa_harness repo gitignore
 graphify-out/
 *.local.*
@@ -5,6 +9,8 @@ state/*.local.md
 state/scratch/
 state/*.pid
 state/*.log
+.env
+.env.*.local
 
 # extension machinery (local merges stay local)
 .pipa-extensions/
