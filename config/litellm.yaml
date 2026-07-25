@@ -1,31 +1,31 @@
 model_list:
 - model_name: primary
   litellm_params:
-    model: stepfun/step-3.7-flash:free
-    api_base: https://api.kilo.ai/api/gateway
-    api_key: os.environ/KILO_API_KEY
+    model: openai/kimi-k3
+    api_base: https://api.moonshot.cn/v1
+    api_key: os.environ/KIMI_API_KEY
     custom_llm_provider: openai
 - model_name: fast
   litellm_params:
-    model: cohere/north-mini-code:free
+    model: stepfun/step-3.7-flash:free
     api_base: https://api.kilo.ai/api/gateway
     api_key: os.environ/KILO_API_KEY
     custom_llm_provider: openai
 - model_name: deep
   litellm_params:
-    model: kilo-auto/free
+    model: nvidia/nemotron-3.5-content-safety:free
     api_base: https://api.kilo.ai/api/gateway
     api_key: os.environ/KILO_API_KEY
     custom_llm_provider: openai
 - model_name: explore
   litellm_params:
-    model: stepfun/step-3.7-flash:free
+    model: openrouter/free
     api_base: https://api.kilo.ai/api/gateway
     api_key: os.environ/KILO_API_KEY
     custom_llm_provider: openai
 - model_name: kilo-free
   litellm_params:
-    model: stepfun/step-3.7-flash:free
+    model: kilo-auto/free
     api_base: https://api.kilo.ai/api/gateway
     api_key: os.environ/KILO_API_KEY
     custom_llm_provider: openai
@@ -33,6 +33,21 @@ litellm_settings:
   drop_params: true
   num_retries: 2
   request_timeout: 300
+  # Context compaction: if tool results exceed this many lines, summarize them
+  compress_tool_results: true
+  compress_threshold_lines: 200
+  # Token budgeting: agents should keep context under this % of model window
+  context_budget: 0.5
+  # Prompt caching: cache stable prefixes (system prompt, read-only files)
+  cache_prompt: true
+  # Session summaries: rolling summaries for long conversations
+  session_summaries: true
+  # Prompt caching: cache stable prefixes (system prompt, read-only files)
+  # Supports Anthropic prompt caching and OpenAI cache_control
+  cache_prompt: true
+  cache_control:
+    enabled: true
+    provider: auto  # auto-detect Anthropic vs OpenAI
 router_settings:
   routing_strategy: simple-shuffle
   fallbacks:

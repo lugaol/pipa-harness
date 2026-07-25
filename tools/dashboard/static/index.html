@@ -138,8 +138,7 @@ body::after {
    LAYOUT — CSS Grid sidebar + main content
    ═══════════════════════════════════════════════════════════ */
 .app-layout {
-  display: grid;
-  grid-template-columns: 260px 1fr;
+  display: block;
   min-height: 100vh;
   position: relative;
   z-index: 1;
@@ -155,10 +154,24 @@ body::after {
   display: flex;
   flex-direction: column;
   gap: var(--sp-6);
-  position: sticky;
-  top: 0;
+  position: fixed;
+  top: 0; left: 0;
+  width: 260px;
   height: 100vh;
   overflow-y: auto;
+  z-index: 200;
+  transition: transform var(--duration-normal) var(--ease-out);
+}
+
+.sidebar-backdrop {
+  display: none;
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.5);
+  backdrop-filter: blur(2px);
+  z-index: 150;
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
 }
 
 .sidebar-brand {
@@ -249,7 +262,8 @@ body::after {
   flex-direction: column;
   gap: var(--sp-6);
   overflow-y: auto;
-  max-height: 100vh;
+  min-height: 100vh;
+  margin-left: 260px;
 }
 
 /* Top bar */
@@ -259,7 +273,38 @@ body::after {
   justify-content: space-between;
   gap: var(--sp-4);
   flex-wrap: wrap;
+  min-width: 0;
 }
+
+.top-bar-title {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  min-width: 0;
+}
+
+.sidebar-toggle,
+.sidebar-close {
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 34px; height: 34px;
+  border-radius: var(--radius-sm);
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  color: var(--text-secondary);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  flex-shrink: 0;
+}
+.sidebar-toggle:hover,
+.sidebar-close:hover {
+  background: var(--bg-hover);
+  color: var(--text-primary);
+  border-color: var(--border-strong);
+}
+.sidebar-toggle svg,
+.sidebar-close svg { width: 18px; height: 18px; }
 
 .top-bar h2 {
   font-size: 22px; font-weight: 700;
@@ -348,7 +393,7 @@ body::after {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--sp-5);
+  padding: var(--sp-6);
   transition: border-color var(--duration-normal) var(--ease-out),
               box-shadow var(--duration-normal) var(--ease-out);
 }
@@ -371,18 +416,20 @@ body::after {
    ═══════════════════════════════════════════════════════════ */
 .status-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 200px), 1fr));
   gap: var(--sp-4);
 }
 
 .status-card {
-  background: var(--bg-card);
-  border: 1px solid var(--border-subtle);
-  border-radius: var(--radius-md);
-  padding: var(--sp-5);
-  display: flex; align-items: center; gap: var(--sp-4);
+   background: var(--bg-card);
+   border: 1px solid var(--border-subtle);
+   border-radius: var(--radius-md);
+   padding: var(--sp-5);
+  display: flex; align-items: center; gap: var(--sp-3);
   transition: all var(--duration-normal) var(--ease-out);
   min-height: 72px;
+  min-width: 0;
+  overflow: hidden;
 }
 .status-card:hover {
   border-color: var(--border-default);
@@ -391,12 +438,12 @@ body::after {
 }
 
 .status-card-icon {
-  width: 36px; height: 36px;
+  width: 32px; height: 32px;
   border-radius: var(--radius-sm);
   display: flex; align-items: center; justify-content: center;
   flex-shrink: 0;
 }
-.status-card-icon svg { width: 18px; height: 18px; }
+.status-card-icon svg { width: 16px; height: 16px; }
 
 .status-card-icon.blue  { background: rgba(59,130,246,0.12); color: var(--accent-primary); }
 .status-card-icon.green { background: rgba(34,197,94,0.12); color: var(--accent-green); }
@@ -406,7 +453,12 @@ body::after {
 
 .status-card-body { flex: 1; min-width: 0; }
 .status-card-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
-.status-card-detail { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+.status-card-detail {
+  font-size: 11px; color: var(--text-muted); margin-top: 1px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
 
 .status-card-dot {
   width: 8px; height: 8px; border-radius: 50%;
@@ -421,22 +473,25 @@ body::after {
    ═══════════════════════════════════════════════════════════ */
 .models-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 300px), 1fr));
   gap: var(--sp-4);
+  grid-auto-rows: minmax(min-content, auto);
 }
 
 .model-card {
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-lg);
-  padding: var(--sp-6);
+  padding: var(--sp-5);
   transition: all var(--duration-normal) var(--ease-out);
   position: relative;
-  overflow: hidden;
+  overflow: visible;
   display: flex;
   flex-direction: column;
   gap: var(--sp-3);
-  min-height: 220px;
+  min-height: auto;
+  min-width: 0;
+  height: 100%;
 }
 .model-card::before {
   content: '';
@@ -456,13 +511,17 @@ body::after {
 
 .model-card-header {
   display: flex; align-items: flex-start; justify-content: space-between;
-  margin-bottom: var(--sp-3);
+  gap: var(--sp-2);
+  margin-bottom: var(--sp-2);
+  min-width: 0;
 }
 
 .model-alias {
   font-size: 15px; font-weight: 700;
   letter-spacing: -0.3px;
   text-transform: capitalize;
+  word-break: break-word;
+  min-width: 0;
 }
 
 .model-provider-badge {
@@ -472,6 +531,8 @@ body::after {
   font-size: 10px; font-weight: 600;
   text-transform: uppercase; letter-spacing: 0.5px;
   flex-shrink: 0;
+  max-width: 100%;
+  white-space: nowrap;
 }
 .model-provider-badge.local  { background: rgba(34,197,94,0.12); color: var(--accent-green); border: 1px solid rgba(34,197,94,0.25); }
 .model-provider-badge.cloud  { background: rgba(249,115,22,0.12); color: var(--accent-orange); border: 1px solid rgba(249,115,22,0.25); }
@@ -485,28 +546,38 @@ body::after {
   padding: var(--sp-2) var(--sp-3);
   border-radius: var(--radius-sm);
   border: 1px solid var(--border-subtle);
-  margin-bottom: var(--sp-4);
-  word-break: break-all;
+  margin-bottom: var(--sp-3);
+  word-break: break-word;
+  overflow-wrap: anywhere;
   line-height: 1.5;
+  min-width: 0;
 }
 
 .model-api-base {
   font-size: 11px;
   color: var(--text-muted);
   font-family: var(--font-mono);
-  margin-bottom: var(--sp-3);
+  margin-bottom: var(--sp-2);
   display: flex; align-items: center; gap: var(--sp-1);
+  word-break: break-all;
+  overflow-wrap: anywhere;
+  min-width: 0;
 }
 
 .model-actions {
   display: flex; flex-direction: column; gap: var(--sp-2);
+  margin-top: auto;
 }
 
 .model-select-row {
   display: flex; gap: var(--sp-2); align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .model-select-row select {
   flex: 1;
+  min-width: 0;
+  max-width: 100%;
   background: var(--bg-base);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
@@ -522,7 +593,13 @@ body::after {
   background-repeat: no-repeat;
   background-position: right 8px center;
   padding-right: 28px;
+  text-overflow: ellipsis;
+  overflow: hidden;
 }
+.model-select-row .btn {
+  flex-shrink: 0;
+}
+.model-select-row select option:disabled { color: var(--text-muted); font-style: italic; }
 .model-select-row select:focus {
   outline: none;
   border-color: var(--accent-primary);
@@ -531,9 +608,12 @@ body::after {
 
 .model-custom-row {
   display: flex; gap: var(--sp-2); align-items: center;
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .model-custom-row input {
   flex: 1;
+  min-width: 0;
   background: var(--bg-base);
   color: var(--text-primary);
   border: 1px solid var(--border-default);
@@ -542,6 +622,7 @@ body::after {
   font-size: 12px;
   font-family: var(--font-mono);
   transition: border-color var(--duration-fast) var(--ease-out);
+  min-width: 120px;
 }
 .model-custom-row input:focus {
   outline: none;
@@ -557,10 +638,12 @@ body::after {
   overflow-x: auto;
   border-radius: var(--radius-lg);
   border: 1px solid var(--border-subtle);
+  -webkit-overflow-scrolling: touch;
 }
 
 .agents-table {
   width: 100%;
+  min-width: 760px;
   border-collapse: collapse;
   font-size: 13px;
 }
@@ -578,8 +661,15 @@ body::after {
   white-space: nowrap;
 }
 
+.agents-table th,
+.agents-table td {
+  min-width: 0;
+}
+
 .agents-table tbody tr {
   transition: background var(--duration-fast) var(--ease-out);
+  min-width: 0;
+}
 }
 .agents-table tbody tr:hover {
   background: var(--bg-hover);
@@ -596,14 +686,18 @@ body::after {
   font-weight: 600;
   font-size: 13px;
   display: flex; align-items: center; gap: var(--sp-2);
+  word-break: break-word;
+  min-width: 0;
 }
 .agent-path {
   font-family: var(--font-mono);
   font-size: 11px;
   color: var(--text-muted);
   margin-top: 2px;
+  word-break: break-all;
+  overflow-wrap: anywhere;
 }
-.agent-desc { color: var(--text-secondary); font-size: 12px; }
+.agent-desc { color: var(--text-secondary); font-size: 12px; word-break: break-word; }
 
 .mode-badge {
   display: inline-flex;
@@ -613,6 +707,7 @@ body::after {
   background: rgba(99,102,241,0.12);
   color: var(--accent-secondary);
   border: 1px solid rgba(99,102,241,0.2);
+  white-space: nowrap;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -620,8 +715,9 @@ body::after {
   ═══════════════════════════════════════════════════════════ */
 .extensions-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));
+  grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr));
   gap: var(--sp-4);
+  grid-auto-rows: minmax(min-content, auto);
 }
 
 .extension-card {
@@ -630,7 +726,12 @@ body::after {
   border-radius: var(--radius-lg);
   padding: var(--sp-5);
   transition: all var(--duration-normal) var(--ease-out);
-  min-height: 140px;
+  min-height: auto;
+  height: 100%;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-3);
+  min-width: 0;
 }
 .extension-card:hover {
   border-color: var(--border-default);
@@ -640,7 +741,8 @@ body::after {
 
 .ext-header {
   display: flex; align-items: center; gap: var(--sp-2);
-  margin-bottom: var(--sp-3);
+  margin-bottom: 0;
+  min-width: 0;
 }
 .ext-icon {
   width: 32px; height: 32px;
@@ -650,8 +752,8 @@ body::after {
   flex-shrink: 0;
 }
 .ext-icon svg { width: 16px; height: 16px; color: #fff; }
-.ext-name { font-size: 14px; font-weight: 600; }
-.ext-path { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+.ext-name { font-size: 14px; font-weight: 600; word-break: break-word; }
+.ext-path { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); word-break: break-all; }
 
 .ext-stats {
   display: flex; gap: var(--sp-3);
@@ -665,9 +767,10 @@ body::after {
 
 .ext-flags {
   display: flex; gap: var(--sp-2);
-  margin-top: var(--sp-3);
+  margin-top: auto;
   padding-top: var(--sp-3);
   border-top: 1px solid var(--border-subtle);
+  flex-wrap: wrap;
 }
 .ext-flag {
   font-size: 10px; font-weight: 600;
@@ -676,6 +779,7 @@ body::after {
   background: rgba(59,130,246,0.1);
   color: var(--accent-primary);
   text-transform: uppercase; letter-spacing: 0.5px;
+  white-space: nowrap;
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -686,24 +790,29 @@ body::after {
 }
 .tool-item {
   display: flex; align-items: center; justify-content: space-between;
+  gap: var(--sp-3);
   padding: var(--sp-3) var(--sp-4);
   background: var(--bg-card);
   border: 1px solid var(--border-subtle);
   border-radius: var(--radius-sm);
   transition: all var(--duration-fast) var(--ease-out);
+  flex-wrap: wrap;
+  min-width: 0;
 }
 .tool-item:hover {
   background: var(--bg-elevated);
   border-color: var(--border-default);
 }
-.tool-info { display: flex; align-items: center; gap: var(--sp-3); }
-.tool-name { font-weight: 500; font-size: 13px; }
-.tool-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.tool-info { display: flex; align-items: center; gap: var(--sp-3); min-width: 0; }
+.tool-name { font-weight: 500; font-size: 13px; word-break: break-word; }
+.tool-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); word-break: break-all; overflow-wrap: anywhere; }
 .tool-status {
   font-size: 10px; font-weight: 600;
   padding: 2px 8px;
   border-radius: 12px;
   text-transform: uppercase; letter-spacing: 0.5px;
+  white-space: nowrap;
+  flex-shrink: 0;
 }
 .tool-status.exec { background: rgba(34,197,94,0.12); color: var(--accent-green); }
 .tool-status.static { background: rgba(148,163,184,0.12); color: var(--text-secondary); }
@@ -821,41 +930,74 @@ body::after {
 .empty-state p { font-size: 13px; }
 
 /* ═══════════════════════════════════════════════════════════
-   RESPONSIVE — Mobile & Tablet
+   RESPONSIVE — Tablet, Mobile, and Zoom
    ═══════════════════════════════════════════════════════════ */
-@media (max-width: 900px) {
-  .app-layout {
-    grid-template-columns: 1fr;
-  }
-  .sidebar {
-    position: relative;
-    height: auto;
-    border-right: none;
-    border-bottom: 1px solid var(--border-subtle);
-    padding: var(--sp-4);
-  }
-  .main-content {
-    padding: var(--sp-4);
-    max-height: none;
-  }
-  .models-grid {
-    grid-template-columns: 1fr;
-  }
-  .status-grid {
-    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-  }
-  .extensions-grid {
-    grid-template-columns: 1fr;
-  }
-  .top-bar { flex-direction: column; align-items: flex-start; }
+@media (max-width: 1200px) {
+  .models-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 280px), 1fr)); }
+  .extensions-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
 }
 
-@media (max-width: 480px) {
+@media (max-width: 900px) {
+  .sidebar {
+    position: fixed;
+    top: 0; left: 0;
+    width: 260px;
+    height: 100vh;
+    border-right: none;
+    transform: translateX(-100%);
+    padding: var(--sp-4);
+  }
+  .sidebar.open {
+    transform: translateX(0);
+  }
+  .sidebar.open ~ .sidebar-backdrop,
+  .sidebar-backdrop.open {
+    display: block;
+    opacity: 1;
+  }
+  .sidebar-close {
+    display: flex;
+    margin-left: auto;
+  }
+  .sidebar-toggle {
+    display: flex;
+  }
+  .main-content {
+    margin-left: 0;
+    width: 100%;
+    padding: var(--sp-4);
+    min-height: 100vh;
+  }
+  .top-bar { flex-direction: row; align-items: center; }
+  .top-bar-actions { flex-shrink: 0; }
+}
+
+@media (max-width: 640px) {
   html { font-size: 13px; }
-  .main-content { padding: var(--sp-3); }
+  .main-content { padding: var(--sp-3); gap: var(--sp-5); }
+  .card { padding: var(--sp-4); }
+  .top-bar { flex-wrap: wrap; }
+  .top-bar-actions { width: 100%; justify-content: flex-start; }
   .status-grid { grid-template-columns: 1fr; }
-  .model-select-row, .model-custom-row { flex-direction: column; }
-  .model-select-row select, .model-custom-row input { width: 100%; }
+  .models-grid { grid-template-columns: 1fr; }
+  .extensions-grid { grid-template-columns: 1fr; }
+  .model-select-row, .model-custom-row { flex-wrap: wrap; }
+  .model-select-row select, .model-custom-row input, .model-select-row button { width: 100%; }
+}
+
+@media (max-width: 400px) {
+  .sidebar { width: 100%; }
+  .status-card { padding: var(--sp-4); }
+  .top-bar-actions .btn { flex: 1; }
+}
+
+/* High zoom / text-only zoom protection */
+@media (max-height: 600px) {
+  .sidebar { padding-top: var(--sp-4); padding-bottom: var(--sp-4); }
+}
+
+@media (min-resolution: 1.5dppx) and (max-width: 1100px) {
+  .models-grid { grid-template-columns: repeat(auto-fit, minmax(min(100%, 260px), 1fr)); }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -897,13 +1039,16 @@ body::after {
   <!-- ═══════════════════════════════════════════════════
        LEFT SIDEBAR — Navigation & Global Status
        ═══════════════════════════════════════════════════ -->
-  <aside class="sidebar" role="navigation" aria-label="Main navigation">
+  <aside class="sidebar" role="navigation" aria-label="Main navigation" id="sidebar">
     <div class="sidebar-brand">
       <div class="sidebar-logo">π</div>
       <div class="sidebar-brand-text">
         <h1>pipa_harness</h1>
         <p id="clock">Loading…</p>
       </div>
+      <button class="sidebar-close" aria-label="Close navigation" onclick="toggleSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
 
     <nav class="nav-section">
@@ -938,6 +1083,30 @@ body::after {
       </button>
     </nav>
 
+    <nav class="nav-section">
+      <div class="nav-label">Harness Features</div>
+      <button class="nav-item" data-section="traces-section" onclick="scrollToSection('traces-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg>
+        Traces
+      </button>
+      <button class="nav-item" data-section="evals-section" onclick="scrollToSection('evals-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>
+        Evals
+      </button>
+      <button class="nav-item" data-section="checkpoints-section" onclick="scrollToSection('checkpoints-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Checkpoints
+      </button>
+      <button class="nav-item" data-section="summaries-section" onclick="scrollToSection('summaries-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+        Summaries
+      </button>
+      <button class="nav-item" data-section="memory-section" onclick="scrollToSection('memory-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/></svg>
+        Memory
+      </button>
+    </nav>
+
     <div class="sidebar-footer">
       <div class="status-pill">
         <span class="status-dot online" id="global-status-dot"></span>
@@ -945,6 +1114,7 @@ body::after {
       </div>
     </div>
   </aside>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
   <!-- ═══════════════════════════════════════════════════
        MAIN CONTENT AREA
@@ -952,9 +1122,14 @@ body::after {
   <main class="main-content">
     <!-- Top Bar -->
     <div class="top-bar">
-      <div>
-        <h2>Operations Dashboard</h2>
-        <p class="subtitle">Manage LLM routing, agent assignments, and harness health</p>
+      <div class="top-bar-title">
+        <button class="sidebar-toggle" aria-label="Toggle navigation" onclick="toggleSidebar()" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div>
+          <h2>Operations Dashboard</h2>
+          <p class="subtitle">Manage LLM routing, agent assignments, and harness health</p>
+        </div>
       </div>
       <div class="top-bar-actions">
         <button class="btn btn-secondary btn-sm" onclick="refreshAll()">
@@ -1059,6 +1234,68 @@ body::after {
       <div class="tools-list" id="tools-list">
         <!-- Populated by JS -->
       </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         TRACES SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="traces-section">
+      <div class="card-header">
+        <h3>Agent Traces</h3>
+        <span class="text-xs text-muted">Opt-in: set PIPA_TRACING=1</span>
+      </div>
+      <div class="agents-table-wrapper">
+        <table class="agents-table">
+          <thead>
+            <tr><th>Agent</th><th>Task</th><th>Status</th><th>Tokens</th><th>Latency</th><th>When</th></tr>
+          </thead>
+          <tbody id="traces-tbody"><tr><td colspan="6" class="empty-state" style="padding:40px"><p>No traces yet</p></td></tr></tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         EVALS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="evals-section">
+      <div class="card-header">
+        <h3>Agent Evals</h3>
+        <span class="text-xs text-muted">Behavioral regression checks</span>
+      </div>
+      <div id="evals-result"><div class="empty-state" style="padding:40px"><p>Run evals to see results</p></div></div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         CHECKPOINTS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="checkpoints-section">
+      <div class="card-header">
+        <h3>Checkpoints</h3>
+        <span class="text-xs text-muted">Fault tolerance & resume points</span>
+      </div>
+      <div class="tools-list" id="checkpoints-list"><div class="empty-state" style="padding:40px"><p>No checkpoints recorded</p></div></div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         SUMMARIES SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="summaries-section">
+      <div class="card-header">
+        <h3>Session Summaries</h3>
+        <span class="text-xs text-muted">Rolling conversation summaries</span>
+      </div>
+      <div class="tools-list" id="summaries-list"><div class="empty-state" style="padding:40px"><p>No summaries yet</p></div></div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         MEMORY SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="memory-section">
+      <div class="card-header">
+        <h3>Memory Store</h3>
+        <span class="text-xs text-muted">SQLite-backed vault index</span>
+      </div>
+      <div id="memory-result"><div class="empty-state" style="padding:40px"><p>Run index_vault.py to populate</p></div></div>
     </section>
   </main>
 </div>
@@ -1168,6 +1405,12 @@ function scrollToSection(id) {
   document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
   const navItem = document.querySelector(`.nav-item[data-section="${id.replace('-section', '')}"]`);
   if (navItem) navItem.classList.add('active');
+
+  // Close mobile sidebar after navigation
+  if (window.innerWidth <= 900) {
+    const sidebar = document.getElementById('sidebar');
+    if (sidebar && sidebar.classList.contains('open')) toggleSidebar();
+  }
 }
 
 /* ═══════════════════════════════════════════════════════════
@@ -1246,23 +1489,19 @@ async function renderModels() {
     const presets = data.presets || [];
     window.__modelPresets = presets;
 
-    const hasOllama = presets.some(p => p.group === 'ollama' && !p.disabled);
-    const pickerLabel = hasOllama
-      ? 'Pick a model (Kilo free · Ollama · Kimi)'
-      : 'Pick a model (Kilo free · Kimi · other)';
+    const pickerLabel = 'Select model…';
 
-    // Group presets by provider for a clean picker: Kilo free / Ollama / Kimi / other
-    const groupLabels = { kilo: 'Kilo Code — free', ollama: 'Ollama — local', kimi: 'Kimi — cloud', other: 'Other presets' };
+    const groupLabels = { kilo: 'Kilo Code — free models', ollama: 'Ollama — local', kimi: 'Kimi (Moonshot) — cloud', other: 'Other presets' };
     const grouped = {};
     for (const p of presets) {
       const g = p.group || 'other';
       (grouped[g] = grouped[g] || []).push(p);
     }
-    const presetOptions = Object.entries(groupLabels)
+    const buildPresetOptions = (currentId) => Object.entries(groupLabels)
       .filter(([g]) => grouped[g] && grouped[g].length)
       .map(([g, label]) =>
         `<optgroup label="${escapeAttr(label)}">${grouped[g].map(p =>
-          `<option value="${escapeAttr(p.id)}" ${p.disabled ? 'disabled' : ''} data-model="${escapeAttr(p.model || '')}">${escapeHtml(p.description || p.id)}${p.disabled ? ' (unavailable)' : ''}</option>`).join('')}</optgroup>`)
+          `<option value="${escapeAttr(p.id)}" ${p.disabled ? 'disabled' : ''} ${p.id === currentId ? 'selected' : ''} data-model="${escapeAttr(p.model || '')}">${escapeHtml(p.description || p.id)}${p.disabled ? ' (unavailable)' : ''}</option>`).join('')}</optgroup>`)
       .join('');
 
     if (!Object.keys(aliases).length) {
@@ -1276,6 +1515,7 @@ async function renderModels() {
       card.className = 'model-card';
       card.dataset.apiBase = info.api_base || '';
       card.dataset.apiKey = info.api_key || '';
+      const currentPresetId = presets.find(p => p.model === info.model)?.id || '';
       card.innerHTML = `
         <div class="model-card-header">
           <div>
@@ -1290,11 +1530,14 @@ async function renderModels() {
         </div>
         <div class="model-actions">
           <div class="model-select-row">
-            <select id="preset-${alias}" aria-label="Select model for ${alias}">
+            <select id="preset-${alias}" aria-label="Select model for ${alias}" onchange="document.getElementById('save-btn-${escapeAttr(alias)}').disabled = !this.value">
               <option value="">${escapeHtml(pickerLabel)}</option>
-              ${presetOptions}
+              ${buildPresetOptions(currentPresetId)}
             </select>
-            <button class="btn btn-primary btn-sm" onclick="saveModel('${escapeAttr(alias)}')">Save</button>
+            <button class="btn btn-primary btn-sm" id="save-btn-${escapeAttr(alias)}" onclick="saveModel('${escapeAttr(alias)}')" ${!currentPresetId ? 'disabled' : ''}>Save</button>
+          </div>
+          <div class="model-select-row">
+            <button class="btn btn-secondary btn-sm" id="reset-btn-${escapeAttr(alias)}" onclick="resetModel('${escapeAttr(alias)}')" style="width:100%">Reset to Default</button>
           </div>
         </div>
       `;
@@ -1309,11 +1552,11 @@ function detectProvider(apiBase, apiKey) {
   if (!apiBase) return { name: 'Ollama Local', badgeClass: 'local' };
   const b = apiBase.toLowerCase();
   const k = (apiKey || '').toLowerCase();
-  if (b.includes('kilo') || b.includes('step')) return { name: 'Kilo Free', badgeClass: 'free' };
+  if (b.includes('kilo') || b.includes('step') || b.includes('ling')) return { name: 'Kilo Code (free)', badgeClass: 'free' };
   if (b.includes('anthropic')) return { name: 'Anthropic', badgeClass: 'cloud' };
-  if (b.includes('moonshot') || b.includes('kimi')) return { name: 'Kimi', badgeClass: 'cloud' };
+  if (b.includes('moonshot') || b.includes('kimi')) return { name: 'Kimi (Moonshot)', badgeClass: 'cloud' };
   if (b.includes('google') || b.includes('gemini')) return { name: 'Google', badgeClass: 'cloud' };
-  if (b.includes('openai')) return { name: 'OpenAI', badgeClass: 'cloud' };
+  if (b.includes('openai') && b.includes('api.openai.com')) return { name: 'OpenAI', badgeClass: 'cloud' };
   if (b.includes('localhost') || b.includes('11434')) return { name: 'Ollama Local', badgeClass: 'local' };
   return { name: 'Cloud', badgeClass: 'cloud' };
 }
@@ -1322,8 +1565,8 @@ function detectProvider(apiBase, apiKey) {
    RENDER: API KEYS (.env)
    ═══════════════════════════════════════════════════════════ */
 const ENV_KEY_META = {
-  KILO_API_KEY: { label: 'Kilo Code', hint: 'free models via api.kilo.ai' },
-  KIMI_API_KEY: { label: 'Kimi (Moonshot)', hint: 'kimi-k2 via api.moonshot.cn' },
+  KILO_API_KEY: { label: 'Kilo Code', hint: 'free models via api.kilo.ai (auto-router, OpenRouter, Step, Ling)' },
+  KIMI_API_KEY: { label: 'Kimi (Moonshot)', hint: 'kimi-k3, k2.7-code, k2.6, k2.5, moonshot-v1 via api.moonshot.cn' },
 };
 
 async function renderEnvKeys() {
@@ -1400,7 +1643,7 @@ async function renderAgents() {
         <td><span class="agent-desc">${escapeHtml(a.description || '—')}</span></td>
         <td><span class="mode-badge">${escapeHtml(a.mode || '—')}</span></td>
         <td>
-          <select id="agent-model-${safeId}" data-path="${escapeAttr(a.path)}" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;font-family:var(--font-sans);cursor:pointer;min-width:200px;">
+          <select id="agent-model-${safeId}" data-path="${escapeAttr(a.path)}" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;font-family:var(--font-sans);cursor:pointer;min-width:0;width:100%;max-width:280px;">
             <option value="">— inherit default —</option>
             ${['litellm/primary','litellm/fast','litellm/deep','litellm/explore'].map(m =>
               `<option value="${escapeAttr(m)}" ${currentModel === m ? 'selected' : ''}>${escapeHtml(m)}</option>`
@@ -1497,24 +1740,167 @@ async function renderTools() {
 }
 
 /* ═══════════════════════════════════════════════════════════
+   RENDER: TRACES
+   ═══════════════════════════════════════════════════════════ */
+async function renderTraces() {
+  try {
+    const data = await apiGet('/traces');
+    const tbody = document.getElementById('traces-tbody');
+    const traces = data.traces || [];
+    if (!traces.length) {
+      tbody.innerHTML = '<tr><td colspan="6" class="empty-state" style="padding:40px"><p>No traces yet — enable with PIPA_TRACING=1</p></td></tr>';
+      return;
+    }
+    tbody.innerHTML = traces.map(t => `
+      <tr>
+        <td><span class="agent-name">${escapeHtml(t.agent || '—')}</span></td>
+        <td><span class="mono text-xs">${escapeHtml(t.task_type || '—')}</span></td>
+        <td><span class="tool-status ${t.status === 'ok' ? 'exec' : t.status === 'running' ? 'static' : 'static'}">${escapeHtml(t.status || '—')}</span></td>
+        <td><span class="mono text-xs">${escapeHtml(String(t.tokens ?? '—'))}</span></td>
+        <td><span class="mono text-xs">${escapeHtml(String(t.latency_ms ?? '—'))} ms</span></td>
+        <td><span class="text-xs text-muted">${escapeHtml(t.created_at || '—')}</span></td>
+      </tr>
+    `).join('');
+  } catch (e) {
+    console.error('Traces fetch failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: EVALS
+   ═══════════════════════════════════════════════════════════ */
+async function renderEvals() {
+  const container = document.getElementById('evals-result');
+  container.innerHTML = '<div class="empty-state" style="padding:40px"><p>Running evals…</p></div>';
+  try {
+    const data = await apiGet('/evals');
+    if (data.ok) {
+      container.innerHTML = `<div class="status-card" style="margin:8px 0"><div class="status-card-icon green"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="20 6 9 17 4 12"/></svg></div><div class="status-card-body"><div class="status-card-name">All checks passed</div><div class="status-card-detail">${escapeHtml(data.detail || '')}</div></div></div>`;
+    } else {
+      container.innerHTML = `<div class="status-card" style="margin:8px 0;border-color:rgba(239,68,68,0.3)"><div class="status-card-icon red"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></div><div class="status-card-body"><div class="status-card-name">Eval failures</div><pre class="mono text-xs" style="margin-top:8px;white-space:pre-wrap;color:var(--accent-red)">${escapeHtml(data.detail || 'unknown')}</pre></div></div>`;
+    }
+  } catch (e) {
+    container.innerHTML = '<div class="empty-state" style="padding:40px"><p>Eval run failed</p></div>';
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: CHECKPOINTS
+   ═══════════════════════════════════════════════════════════ */
+async function renderCheckpoints() {
+  try {
+    const data = await apiGet('/checkpoints');
+    const list = document.getElementById('checkpoints-list');
+    const cps = data.checkpoints || [];
+    if (!cps.length) {
+      list.innerHTML = '<div class="empty-state" style="padding:40px"><p>No checkpoints recorded</p></div>';
+      return;
+    }
+    list.innerHTML = cps.map(cp => `
+      <div class="tool-item">
+        <div class="tool-info">
+          <div>
+            <div class="tool-name mono text-xs">${escapeHtml(cp)}</div>
+          </div>
+        </div>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Checkpoints fetch failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: SUMMARIES
+   ═══════════════════════════════════════════════════════════ */
+async function renderSummaries() {
+  try {
+    const data = await apiGet('/summaries');
+    const list = document.getElementById('summaries-list');
+    const sums = data.summaries || [];
+    if (!sums.length) {
+      list.innerHTML = '<div class="empty-state" style="padding:40px"><p>No summaries yet</p></div>';
+      return;
+    }
+    list.innerHTML = sums.map(s => `
+      <div class="tool-item">
+        <div class="tool-info">
+          <div>
+            <div class="tool-name">${escapeHtml(s.name)}</div>
+            <div class="tool-path mono">${escapeHtml(s.path)}</div>
+          </div>
+        </div>
+        <span class="text-xs text-muted mono">${new Date(s.mtime * 1000).toLocaleString()}</span>
+      </div>
+    `).join('');
+  } catch (e) {
+    console.error('Summaries fetch failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: MEMORY
+   ═══════════════════════════════════════════════════════════ */
+async function renderMemory() {
+  try {
+    const data = await apiGet('/memory');
+    const container = document.getElementById('memory-result');
+    if (data.status === 'not indexed') {
+      container.innerHTML = '<div class="empty-state" style="padding:40px"><p>Not indexed — run tools/memory_store/index_vault.py</p></div>';
+      return;
+    }
+    const scopeBadges = Object.entries(data.scopes || {}).map(([scope, count]) =>
+      `<span class="model-provider-badge local">${escapeHtml(scope)}: ${count}</span>`
+    ).join(' ');
+    container.innerHTML = `
+      <div class="status-card" style="margin:8px 0">
+        <div class="status-card-icon blue"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2a10 10 0 1 0 10 10H12V2z"/><path d="M12 2a10 10 0 0 1 10 10"/></svg></div>
+        <div class="status-card-body">
+          <div class="status-card-name">Indexed</div>
+          <div class="status-card-detail">${escapeHtml(data.count || 0)} memories</div>
+          <div style="margin-top:8px;display:flex;gap:6px;flex-wrap:wrap">${scopeBadges}</div>
+        </div>
+      </div>
+    `;
+  } catch (e) {
+    console.error('Memory fetch failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
    ACTIONS
    ═══════════════════════════════════════════════════════════ */
 async function saveModel(alias) {
+  const btn = document.getElementById(`save-btn-${alias}`);
   const sel = document.getElementById(`preset-${alias}`);
   const presetId = sel.value;
   if (!presetId) { toast('Select a model first', 'error'); return; }
   try {
+    btn.disabled = true;
+    btn.innerHTML = 'Saving…';
     const r = await apiPost(`/models/${encodeURIComponent(alias)}`, { preset_id: presetId });
-    if (r.ok) { toast(`Updated ${alias} → ${(r.model || '').split('/').pop() || presetId}`, 'success'); renderModels(); }
-    else { toast(r.detail || 'Update failed', 'error'); }
-  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
+    if (r.ok) {
+      toast(`Updated ${alias} → ${(r.model || '').split('/').pop() || presetId}`, 'success');
+      renderModels();
+    } else {
+      toast(r.detail || 'Update failed', 'error');
+      btn.disabled = false;
+      btn.innerHTML = 'Save';
+    }
+  } catch (e) {
+    toast('Request failed: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.innerHTML = 'Save';
+  }
 }
 
 async function resetModel(alias) {
   try {
+    const btn = document.getElementById(`reset-btn-${alias}`);
+    if (btn) { btn.disabled = true; btn.innerHTML = 'Resetting…'; }
     const r = await apiPost(`/models/${encodeURIComponent(alias)}/reset`, {});
     if (r.ok) { toast(`Reset ${alias} to default`, 'success'); renderModels(); }
-    else { toast('Reset failed', 'error'); }
+    else { toast('Reset failed', 'error'); if (btn) { btn.disabled = false; btn.innerHTML = 'Reset to Default'; } }
   } catch (e) { toast('Request failed: ' + e.message, 'error'); }
 }
 
@@ -1575,13 +1961,22 @@ async function startOllama() {
 }
 
 async function refreshAll() {
-  await Promise.all([renderStatus(), renderEnvKeys(), renderModels(), renderAgents(), renderExtensions(), renderTools()]);
+  await Promise.all([renderStatus(), renderEnvKeys(), renderModels(), renderAgents(), renderExtensions(), renderTools(), renderTraces(), renderEvals(), renderCheckpoints(), renderSummaries(), renderMemory()]);
   toast('Dashboard refreshed', 'success');
 }
 
 /* ═══════════════════════════════════════════════════════════
    UTILITY
    ═══════════════════════════════════════════════════════════ */
+function toggleSidebar() {
+  const sidebar = document.getElementById('sidebar');
+  const backdrop = document.getElementById('sidebar-backdrop');
+  const toggle = document.querySelector('.sidebar-toggle');
+  const isOpen = sidebar.classList.toggle('open');
+  backdrop.classList.toggle('open', isOpen);
+  if (toggle) toggle.setAttribute('aria-expanded', String(isOpen));
+}
+
 function escapeHtml(str) {
   const div = document.createElement('div');
   div.textContent = str;
@@ -1607,7 +2002,7 @@ function initNavObserver() {
     });
   }, { threshold: 0.3, rootMargin: '-80px 0px -60% 0px' });
 
-  ['status-section', 'keys-section', 'models-section', 'agents-section', 'extensions-section', 'tools-section'].forEach(id => {
+  ['status-section', 'keys-section', 'models-section', 'agents-section', 'extensions-section', 'tools-section', 'traces-section', 'evals-section', 'checkpoints-section', 'summaries-section', 'memory-section'].forEach(id => {
     const el = document.getElementById(id);
     if (el) observer.observe(el);
   });
@@ -1626,7 +2021,12 @@ async function init() {
     renderModels(),
     renderAgents(),
     renderExtensions(),
-    renderTools()
+    renderTools(),
+    renderTraces(),
+    renderEvals(),
+    renderCheckpoints(),
+    renderSummaries(),
+    renderMemory()
   ]);
 
   // Auto-refresh status every 5s
@@ -1634,6 +2034,14 @@ async function init() {
 
   // Init nav scroll observer
   setTimeout(initNavObserver, 500);
+
+  // Close mobile sidebar when returning to desktop
+  window.addEventListener('resize', () => {
+    if (window.innerWidth > 900) {
+      const sidebar = document.getElementById('sidebar');
+      if (sidebar && sidebar.classList.contains('open')) toggleSidebar();
+    }
+  });
 }
 
 document.addEventListener('DOMContentLoaded', init);

@@ -207,7 +207,9 @@ def _infer_provider(model_id: str) -> str:
     if mid.startswith("kwaipilot") or "kat-coder" in mid: return "Kwaipilot"
     if mid.startswith("cohere"): return "Cohere"
     if mid.startswith("openrouter"): return "OpenRouter"
-    if mid.startswith("kilo-auto"): return "Kilo Auto"
+    if mid.startswith("kilo-auto"): return "Kilo Code (free)"
+    if mid.startswith("kimi") or mid.startswith("moonshot"): return "Kimi (Moonshot)"
+    if ":free" in mid: return "Kilo Code (free)"
     return "Kilo Gateway"
 
 def fetch_ollama_models() -> list[dict]:
@@ -240,16 +242,34 @@ def fetch_ollama_models() -> list[dict]:
 # ── litellm config ─────────────────────────────────────────────────────────
 
 PRESET_MODELS = [
+    # Kilo Code free gateway models (openrouter + Kilo Auto)
+    {"id": "kilo-auto/free", "provider": "Kilo Code (free)", "model": "kilo-auto/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "Kilo Auto-router — picks the best free model"},
+    {"id": "openrouter/free", "provider": "Kilo Code (free)", "model": "openrouter/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "OpenRouter free-tier pool"},
     {"id": "step-3.7-flash:free", "provider": "Kilo Code (free)", "model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "Step 3.7 Flash — free via Kilo Code"},
+    {"id": "ling-3.0-flash:free", "provider": "Kilo Code (free)", "model": "inclusionai/ling-3.0-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "InclusionAI Ling 3.0 Flash — free via Kilo Code"},
+
+    # Kimi (Moonshot) cloud models — current as of 2026-07
+    {"id": "kimi-k3", "provider": "Kimi (Moonshot)", "model": "openai/kimi-k3", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Kimi K3 — flagship, 1M context, multimodal"},
+    {"id": "kimi-k2.7-code", "provider": "Kimi (Moonshot)", "model": "openai/kimi-k2.7-code", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Kimi K2.7 Code — coding specialist, 256k context"},
+    {"id": "kimi-k2.7-code-highspeed", "provider": "Kimi (Moonshot)", "model": "openai/kimi-k2.7-code-highspeed", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Kimi K2.7 Code High-Speed — fast coding, 256k"},
+    {"id": "kimi-k2.6", "provider": "Kimi (Moonshot)", "model": "openai/kimi-k2.6", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Kimi K2.6 — vision + text, thinking mode, 256k"},
+    {"id": "kimi-k2.5", "provider": "Kimi (Moonshot)", "model": "openai/kimi-k2.5", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Kimi K2.5 — general agent/code/vision, 256k"},
+    {"id": "moonshot-v1-8k", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-8k", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 — 8k context"},
+    {"id": "moonshot-v1-32k", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-32k", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 — 32k context"},
+    {"id": "moonshot-v1-128k", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-128k", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 — 128k context"},
+    {"id": "moonshot-v1-8k-vision-preview", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-8k-vision-preview", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 Vision — 8k"},
+    {"id": "moonshot-v1-32k-vision-preview", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-32k-vision-preview", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 Vision — 32k"},
+    {"id": "moonshot-v1-128k-vision-preview", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-128k-vision-preview", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 Vision — 128k"},
+
+    # Ollama local models
     {"id": "gpt-oss:20b", "provider": "Ollama (local)", "model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 20B — primary coding"},
     {"id": "qwen3:8b", "provider": "Ollama (local)", "model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 8B — fast, tool-calling"},
-    {"id": "kimi-k2:free", "provider": "Kimi (cloud)", "model": "openai/kimi-k2", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "description": "Kimi free tier"},
-    {"id": "claude-sonnet-4-5", "provider": "Anthropic (cloud)", "model": "anthropic/claude-sonnet-4-5", "api_base": "", "api_key": "os.environ/ANTHROPIC_API_KEY", "description": "Claude Sonnet — strong reasoning"},
+
+    # Other cloud providers
+    {"id": "claude-sonnet-4-5", "provider": "Anthropic (cloud)", "model": "anthropic/claude-sonnet-4-5", "api_base": "", "api_key": "os.environ/ANTHROPIC_API_KEY", "description": "Claude Sonnet 4.5 — strong reasoning"},
     {"id": "claude-haiku", "provider": "Anthropic (cloud)", "model": "anthropic/claude-3-5-haiku-20241022", "api_base": "", "api_key": "os.environ/ANTHROPIC_API_KEY", "description": "Claude Haiku — fast, cheap"},
     {"id": "gemini-2.5-flash", "provider": "Google (cloud)", "model": "gemini/gemini-2.5-flash-preview-05-20", "api_base": "", "api_key": "os.environ/GEMINI_API_KEY", "description": "Gemini 2.5 Flash — free tier available"},
     {"id": "gpt-4o-mini", "provider": "OpenAI (cloud)", "model": "openai/gpt-4o-mini", "api_base": "", "api_key": "os.environ/OPENAI_API_KEY", "description": "GPT-4o Mini — cheap, fast"},
-    {"id": "ling-3.0-flash:free", "provider": "Kilo Code (free)", "model": "inclusionai/ling-3.0-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "InclusionAI Ling 3.0 Flash — free via Kilo Code"},
-    {"id": "kilo-auto/free", "provider": "Kilo Auto (free)", "model": "kilo-auto/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai", "description": "Kilo Auto Free — free via Kilo Code"},
 ]
 
 def parse_litellm_config() -> dict:
@@ -512,7 +532,7 @@ def api_set_model(alias: str, payload: dict):
 @app.post("/api/models/{alias}/reset")
 def api_reset_model(alias: str):
     defaults = {
-        "primary": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "primary": {"model": "openai/kimi-k3", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY"},
         "fast": {"model": "inclusionai/ling-3.0-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
         "deep": {"model": "kilo-auto/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
         "explore": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
@@ -589,6 +609,62 @@ def api_edit_agent_file(agent_path: str, payload: dict):
         new_text = re.sub(r"---\s*\n\s*---\s*\n", "\n", new_text)
     candidate.write_text(new_text)
     return JSONResponse({"ok": True, "model": model, "file": str(candidate)})
+
+# ── new harness features ─────────────────────────────────────────────────────
+
+@app.get("/api/traces")
+def api_traces():
+    import sqlite3
+    db = STATE / "traces.db"
+    if not db.exists():
+        return JSONResponse({"traces": []})
+    conn = sqlite3.connect(db)
+    rows = conn.execute("SELECT agent, task_type, status, tokens, latency_ms, created_at FROM traces ORDER BY created_at DESC LIMIT 50").fetchall()
+    conn.close()
+    return JSONResponse({"traces": [dict(zip(["agent","task_type","status","tokens","latency_ms","created_at"], r)) for r in rows]})
+
+@app.get("/api/evals")
+def api_evals():
+    import subprocess, json
+    try:
+        r = subprocess.run([sys.executable, str(ROOT / "tools" / "agent_evals" / "run.py")], capture_output=True, text=True, timeout=10)
+        if r.returncode == 0:
+            return JSONResponse({"ok": True, "detail": "All evals passed"})
+        return JSONResponse({"ok": False, "detail": r.stdout[:500]})
+    except Exception as e:
+        return JSONResponse({"ok": False, "detail": str(e)})
+
+@app.get("/api/checkpoints")
+def api_checkpoints():
+    plan = STATE / "PLAN.md"
+    if not plan.exists():
+        return JSONResponse({"checkpoints": []})
+    text = plan.read_text()
+    cp_section = re.search(r"## Checkpoints\n(.*?)(?:\n## |\Z)", text, re.DOTALL)
+    if not cp_section:
+        return JSONResponse({"checkpoints": []})
+    lines = [l.strip() for l in cp_section.group(1).strip().splitlines() if l.strip() and not l.startswith("#")]
+    return JSONResponse({"checkpoints": lines})
+
+@app.get("/api/summaries")
+def api_summaries():
+    summaries_dir = STATE / "summaries"
+    if not summaries_dir.exists():
+        return JSONResponse({"summaries": []})
+    files = sorted(summaries_dir.glob("*.md"), key=lambda f: f.stat().st_mtime, reverse=True)[:20]
+    return JSONResponse({"summaries": [{"name": f.name, "path": str(f.relative_to(ROOT)), "mtime": f.stat().st_mtime} for f in files]})
+
+@app.get("/api/memory")
+def api_memory():
+    import sqlite3
+    db = STATE / "memory.db"
+    if not db.exists():
+        return JSONResponse({"status": "not indexed", "count": 0})
+    conn = sqlite3.connect(db)
+    count = conn.execute("SELECT COUNT(*) FROM memories").fetchone()[0]
+    scopes = conn.execute("SELECT scope, COUNT(*) FROM memories GROUP BY scope").fetchall()
+    conn.close()
+    return JSONResponse({"status": "indexed", "count": count, "scopes": dict(scopes)})
 
 @app.get("/", response_class=HTMLResponse)
 def index():

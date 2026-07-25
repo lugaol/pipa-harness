@@ -1,120 +1,196 @@
 # AGENTS.md — pipa_harness
-A project-agnostic agent harness built on OpenCode + LiteLLM + graphify +
-Obsidian, orchestrated with emdash. This file is the always-loaded router.
-## Philosophy (adapted from aiox-core, lean)
-- **CLI First → Observability Second → UI Third.** The CLI is the source of
-  truth. New features must work 100% via CLI before any UI. Dashboards only
-  *observe* what the CLI does — they never control it.
-- **Two-phase workflow.** Planning (analyst→pm→architect) produces a spec;
-  the scrum master turns the spec into self-contained stories. Build agents
-  open a story file with complete context — no conversation loss.
-- **File-driven context passing.** Agents hand off via files (`specs/` →
-  stories), not chat history. This eliminates context loss across sessions.
-- **Lean by default.** No engines, no epics, no orchestration frameworks.
-  Markdown files + subagents + git. That's the whole system.
+<meta awareness="high">
+A project-agnostic agent harness: OpenCode + LiteLLM + graphify + Obsidian.
+This file is the always-loaded router. Everything else loads on demand.
+
+## Philosophy
+CLI First → Observability Second → UI Third. Two-phase workflow (plan → build).
+File-driven context passing (`specs/` → stories). Lean by default.
+
 ## Stack
-- **OpenCode** — interactive/headless coding agent (TUI + `opencode run`).
-- **LiteLLM** — model gateway at `http://localhost:4000`. All model names
-  (`primary`, `fast`, `deep`, `explore`) are aliases in `config/litellm.yaml`.
-- **graphify** — persistent knowledge graph. Query BEFORE grepping.
-- **Obsidian** — this harness is a vault; memory lives in `vault/`.
-- **emdash** — parallel agent orchestration via git worktrees.
+- **OpenCode** — TUI + headless agent runner
+- **LiteLLM** — model gateway `:4000`; aliases in `config/litellm.yaml`
+- **graphify** — persistent codebase graph; query BEFORE grep
+- **Obsidian** — vault memory in `vault/`
+
 ## Golden rules
-- [HARD] Never commit or push unless the user explicitly asks.
-- [HARD] Never hardcode secrets/API keys. Use env vars or `{file:}`.
+- [HARD] Never commit/push unless asked.
+- [HARD] Never hardcode secrets; use env vars or `{file:}`.
 - [HARD] Follow existing conventions; mimic neighboring code.
-- [SOFT] Prefer early-return and short functions in new code.
-- [SOFT] Verify with the project's own test/build commands before "done".
-- [SOFT] Output discipline: show the outcome, not the machinery. Don't
-  narrate compliance ("I will now follow rule X") — just do the work.
-- [SOFT] Search discipline: judge time-stability before searching — answer
-  stable facts from knowledge, search only what's volatile. Search to verify
-  assumptions, not to fish for answers; cite sources inline for searched facts.
-- [SOFT] Interrupt the user only on genuine ambiguity, conflicting
-  instructions, or irreversible/outward-facing actions. Otherwise pick the
-  most reasonable interpretation, proceed, and note the assumption.
+- [SOFT] Early-return, short functions.
+- [SOFT] Verify with project's own test/build commands.
+- [SOFT] Output discipline: show outcome, not machinery.
+- [SOFT] Search discipline: judge time-stability; search assumptions, not answers; cite sources.
+- [SOFT] Interrupt only on genuine ambiguity/conflicts; otherwise pick the most reasonable interpretation and note it.
+
+## HITL approval gates
+Agents MUST request explicit approval for irreversible or outward-facing actions:
+- `git push` — requires approval
+- `git commit` — requires approval (prefer no commits unless asked)
+- `rm -rf` / `rm` on tracked files — requires approval
+- External data exfiltration — requires approval
+- `eval()`, `exec()`, `Function()` on untrusted input — forbidden (HARD)
+
 ## Conflict priority
 turn instruction > AGENTS.md > project extension > base rules/ > skills/ > vault
-On overlap, the project extension wins over base files. User skills win over
-built-in skills on format.
+User skills win over built-in skills on format.
+
 ## Two-phase workflow
 ```
-PHASE 1 — PLAN (produce a spec)
-  @analyst   → research + briefing       → specs/<feature>/briefing.md
-  @pm        → requirements + PRD         → specs/<feature>/prd.md
-  @architect → technical design          → specs/<feature>/architecture.md
-  @qa        → critique spec             → (feedback loop)
-PHASE 2 — BUILD (consume stories)
-  @sm        → spec → detailed stories   → specs/<feature>/stories/*.md
-  @dev       → implement one story        → code + regression test
-  @qa        → review build + verify      → pass/fail verdict
+PHASE 1 — PLAN
+  @analyst → briefing.md
+  @pm → prd.md
+  @architect → architecture.md
+  @qa → critique (loop)
+PHASE 1.5 — BRIDGE
+  @sm → stories/NN-*.md
+PHASE 2 — BUILD
+  @dev → implement + test
+  @qa → verify (PASS/FAIL)
 ```
-Each story file is self-contained: context, acceptance criteria, implementation
-notes, file refs. The dev agent reads ONE file and has everything it needs.
-For small/trivial tasks, skip Phase 1 — go straight to `@dev`.
-## Routing (load ONLY when the trigger matches)
-Progressive disclosure: this table is all you get upfront. Never load a skill
-whose trigger didn't fire; never read a rule file outside the path glob you
-touched. Full SKILL.md content loads on demand, per task stage.
-| Task involves...                       | Load                                  |
-|----------------------------------------|---------------------------------------|
-| architecture, "how does X work"        | skills/graphify/SKILL.md              |
-| debugging, bug, error, crash            | skills/debugging/SKILL.md             |
-| code review, PR, diff                  | skills/code-review/SKILL.md           |
-| release, version, tag, changelog       | skills/release/SKILL.md               |
-| latency, performance, profiling        | skills/performance/SKILL.md           |
-| UI/UX design, styling, design system   | skills/ui-ux-pro-max/SKILL.md         |
-## Agents
-**Planning** (Phase 1): `@analyst` `@pm` `@architect`
-**Bridge**: `@sm` (spec → stories)
-**Build** (Phase 2): `@dev` (was implementer) `@qa` (was verifier)
-**Utility**: `@explorer` `@researcher`
-See `agents/*.md` for definitions. Invoke with `@name` in OpenCode.
+Trivial tasks → skip Phase 1, go straight to `@dev`.
+
+## Routing (progressive disclosure)
+Skills are listed by name + trigger only. Full SKILL.md loads on demand.
+| Trigger keywords | Skill |
+|-----------------|-------|
+| architecture, how does X work | graphify |
+| bug, error, crash | debugging |
+| review, PR, diff | code-review |
+| release, version, tag | release |
+| latency, performance | performance |
+| design, UI, style | ui-ux-pro-max |
+
+## Agents (base)
+Planning: `@analyst` `@pm` `@architect` `@qa`
+Bridge: `@sm`
+Build: `@dev` `@qa`
+Utility: `@explorer` `@researcher`
+Definitions in `agents/*.md`. Invoke with `@name` in OpenCode.
+
 ## Project extensions
-Include project-specific rules, skills, and AGENTS.md snippets via
-`.harness_extension/` in each project. See `README.md` for the migration
-from the deprecated `pipa-extend.sh` / `squads/` model.
-## Knowledge graph — query BEFORE reading files
-`graphify query "<q>"`, `graphify explain "<Node>"`, `graphify path "A" "B"`.
-Broad review: `graphify-out/GRAPH_REPORT.md`. Fallback to grep, no error.
-## Library API docs — Context7 MCP
-Use `resolve-library-id` → `query-docs` for any external library. Prevents
-hallucinated APIs, saves tokens vs reading full source.
-## Memory (two tiers)
-- **ACTIVE** (`<meta awareness="high">`): `state/SESSION.md` + `state/PLAN.md`.
-  Read at session start; PLAN.md doubles as the structured task ledger for
-  multi-step work — keep it current as you go.
-- **PASSIVE** (`<meta awareness="low">`): `vault/decisions/`, `vault/research/`.
-  Queried on demand, never injected wholesale. Apply only when relevant to the
-  current task; check `as_of`/`valid_until` frontmatter before citing —
-  expired → flag, don't apply.
-- Session end: update SESSION.md (≤30 lines); write a decision note if
-  architecture changed.
+`.harness_extension/` carries project-specific rules/skills/agents.
+Conflict priority: extension > base.
+
+## Knowledge graph
+`graphify query "<q>"`, `graphify path "A" "B"`, `graphify explain "X"`.
+Fallback to grep, no error.
+
+## Library API docs
+`resolve-library-id` → `query-docs` for external libraries. Prevents hallucinated APIs.
+
+## Memory
+<details>
+<summary>Active (high awareness) — read at session start</summary>
+
+- `state/SESSION.md` — current goal, active work, blockers (≤30 lines)
+- `state/PLAN.md` — in-session task ledger + goal hierarchy + active loops
+</details>
+
+<details>
+<summary>Passive (low awareness) — apply only when relevant</summary>
+
+- `vault/decisions/` — architectural decisions with `as_of`/`valid_until`
+- `vault/research/` — external findings with `as_of`/`valid_until`
+- `vault/architecture/` — architecture notes
+- `graphify-out/` — queryable codebase graph
+</details>
+
+**Rule:** Never inject passive memory wholesale. Check `as_of`/`valid_until`; expired → flag, don't apply.
+
+## Memory store (structured recall)
+- **Index:** `tools/memory_store/index_vault.py` — indexes `vault/*.md` into `state/memory.db`.
+- **Query:** `tools/memory_store/query.py "<query>"` — returns matching notes with scope, dates, status.
+- **Why:** Flat markdown is human-readable but slow to query. SQLite adds scoped recall without changing the vault format.
+
 ## Artifacts & scratch
-- Deliverables are written in place, at their final path.
-- Scratch/intermediate files go to `state/scratch/` (gitignored) — never leave
-  them in the repo root or mix them into the deliverable diff.
-## Scheduled tasks (optional)
-No framework: schedule `bin/litellm-task.sh <alias> "<prompt>"` via OS
-cron/launchd when a recurring check is needed. The CLI stays the source of
-truth.
+- Deliverables: final path, tagged.
+- Scratch: `state/scratch/` (gitignored). Never in repo root.
+
 ## Model orchestration
 All calls go through LiteLLM aliases — never call providers directly.
-| Alias    | Use for                          |
-|----------|----------------------------------|
-| `fast`   | triage, titles, summaries        |
-| `primary`| implementation, dev agent         |
-| `deep`   | research, planning, architect    |
-| `explore`| read-only codebase Q&A            |
+| Alias | Use for | Token cost |
+|-------|---------|------------|
+| `fast` | Triage, QA verdicts, summaries | Low |
+| `primary` | Implementation, dev agent, supervisor | Medium-High |
+| `deep` | Research, planning, architect | High |
+| `explore` | Read-only codebase Q&A | Lowest |
 Scripts: `bin/litellm-task.sh <alias> "<prompt>"`.
-Override via env: `LITELLM_MODEL_FAST`, `LITELLM_MODEL_PRIMARY`, etc.
+
+### Token-saving rules
+- Delegate search to `@explorer` instead of reading files.
+- Use `@qa` for binary verdicts, not reasoning.
+- Reserve `primary` for code/decisions/coordination.
+- Reserve `deep` for multi-source reasoning only.
+- Never run `deep` for simple lookups.
+
+## Context compaction
+- **Budget:** Keep agent context under 50% of the model's window. The rest is reserved for the user message + tool results.
+- **Compression:** If tool results exceed 200 lines, summarize them before adding to context. Use `compress_tool_results` in LiteLLM settings.
+- **Summaries:** After 3+ tool calls, generate a rolling summary of what was found. Inject the summary + last 2 turns into the next prompt, not the full history.
+- **Token counting:** Before running an agent, estimate the token cost of the prompt. If it exceeds the budget, compress or split the task.
+
 ## Stop governor
 - One tool round solves it → stop.
 - 3 search rounds without progress → ask the user.
 - "Done" = green build + tests pass, never "looks good".
+
+## Concurrent execution
+Run independent tasks in parallel via `task` tool with unique `task_id`s.
+Guard: parallel agents MUST NOT edit the same file. Check `git status` first.
+
+## Conflict resolution
+1. `@explorer` presents evidence (`file:line` refs).
+2. `@researcher` presents external evidence (citations).
+3. Orchestrator (or user) decides based on goal alignment.
+4. Stalemate → escalate to user with both positions.
+
+## Harness transparency
+Every agent that delegates, coordinates, or produces a final result MUST end
+with:
+```markdown
+## Harness usage
+- Agents used: @explorer, @dev, @qa
+- Skills loaded: debugging, code-review
+- Rules applied: audio-ndk (HARD), testing (HARD)
+- Tools used: graphify query, grep, git diff
+- Orchestration: sequential (explorer → dev → qa), 1 parallel task
+- Model routing: explore (cheapest) for search, primary for implementation, fast for verification
+```
+
+## ask_user tool
+Use `ask_user` only for:
+- Genuine ambiguity where the next action is irreversible
+- Conflicting instructions that can't be resolved by priority rules
+- Missing critical information that blocks progress
+
+Do NOT use for:
+- Preferences that don't affect correctness
+- "Looks good?" confirmations — just do the work
+- Re-stating what the user already said
+
+## Sandbox model
+- `/tmp` — ephemeral workspace for scratch, temp files, experiments. Wiped between sessions.
+- `/mnt/agents` (project root) — persistent workspace for deliverables, state, vault. Code must not die in `/tmp`.
+- Rule: never put deliverables in `/tmp`; never leave scratch in project root.
+
+## Todo tool
+Use `todowrite` for structured task tracking. Read it at session start; update after each step.
+Format: `content`, `priority` (high/medium/low), `status` (pending/in_progress/completed/cancelled).
+Rule: keep exactly one `in_progress` while work remains.
+
+## Observability (optional, opt-in)
+- **Traces:** Each agent run can emit a trace span: agent name, model alias, token count, latency, tools called. Stored in SQLite (`state/traces.db`) or exported to OTel collector.
+- **Enable:** Set `PIPA_TRACING=1` in env. Use `tools/tracing.py start|end|export`.
+- **Why:** Enables debugging latency, token usage, and failure modes without manual log inspection.
+
+## Observability (optional, opt-in)
+- **Traces:** Each agent run can emit a trace span: agent name, model alias, token count, latency, tools called. Stored in SQLite (`state/traces.db`) or exported to OTel collector.
+- **Enable:** Set `PIPA_TRACING=1` in env. Use `tools/tracing.py start|end|export`.
+- **Why:** Enables debugging latency, token usage, and failure modes without manual log inspection.
+
 ## Repo layout
 `AGENTS.md` (router) · `rules/` (path-scoped) · `skills/` (trigger-loaded) ·
-`agents/` (subagents) · `specs/` (plan→story workflow) · `bin/` (wrappers) ·
-`config/` (LiteLLM + OpenCode) · `vault/` (dated memory) · `state/` (session) ·
-`squads/` (project extensions + domain bundles) · `graphify-out/` (gitignored) ·
-`.opencode/` (per-project, gitignored).
+`agents/` (subagents) · `specs/` (plan→story) · `bin/` (wrappers) ·
+`config/` (LiteLLM + OpenCode) · `vault/` (memory) · `state/` (session) ·
+`graphify-out/` (gitignored) · `.opencode/` (gitignored)

@@ -1,4 +1,5 @@
 ---
+model: litellm/explore
 description: One line — what this subagent does and when to use it.
 mode: subagent
 model: litellm/explore
