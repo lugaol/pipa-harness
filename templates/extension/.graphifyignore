@@ -1,0 +1,7 @@
+# graphify scope control
+**/node_modules/**
+**/build/**
+**/dist/**
+**/.git/**
+**/dependencies/**
+graphify-out/**

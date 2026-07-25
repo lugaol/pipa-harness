@@ -148,7 +148,7 @@ KILO_API_URL = "https://api.kilo.ai/api/gateway/models"
 
 def _get_kilo_api_key() -> str:
     locations = [
-        Path(__file__).resolve().parent.parent.parent.parent / ".env",
+        ROOT / ".env",
         Path.home() / ".harness_extensions_registry" / ".env",
     ]
     for env_file in locations:
@@ -300,7 +300,7 @@ def all_presets() -> list[dict]:
 # ── .env API-key store ───────────────────────────────────────────────────────
 
 ENV_FILE = ROOT / ".env"
-ENV_KEYS = ("KILO_API_KEY", "KIMI_API_KEY")
+ENV_KEYS = ("KILO_API_KEY", "KIMI_API_KEY", "ANTHROPIC_API_KEY", "GEMINI_API_KEY", "OPENAI_API_KEY")
 
 def read_env_file() -> dict:
     values = {}
@@ -351,7 +351,7 @@ def api_restart_gateway():
     pidfile = STATE / "litellm.pid"
     if pidfile.exists():
         try:
-            subprocess.run(["kill", int(pidfile.read_text().strip())], capture_output=True, timeout=2)
+            subprocess.run(["kill", str(int(pidfile.read_text().strip()))], capture_output=True, timeout=2)
             time.sleep(1.5)
         except Exception:
             pass
@@ -511,10 +511,18 @@ def api_edit_agent_file(agent_path: str, payload: dict):
     text = candidate.read_text()
     if model:
         new_text = re.sub(r"^(model:\s*).*$", r"\1" + model, text, count=1, flags=re.MULTILINE)
-        if new_text == text and "model:" not in text:
-            new_text = "---\nmodel: " + model + "\n---\n" + text
+        if new_text == text:
+            if text.startswith("---"):
+                parts = text.split("---", 2)
+                if len(parts) >= 3:
+                    new_text = parts[0] + "---\nmodel: " + model + "\n" + parts[1].lstrip("\n") + "---" + parts[2]
+                else:
+                    new_text = "---\nmodel: " + model + "\n---\n" + text
+            else:
+                new_text = "---\nmodel: " + model + "\n---\n" + text
     else:
-        new_text = re.sub(r"^(model:\s*).*$", r"\1", text, count=1, flags=re.MULTILINE)
+        new_text = re.sub(r"^model:\s*.*\n?", "", text, count=1, flags=re.MULTILINE)
+        new_text = re.sub(r"---\s*\n\s*---\s*\n", "\n", new_text)
     candidate.write_text(new_text)
     return JSONResponse({"ok": True, "model": model, "file": str(candidate)})
 

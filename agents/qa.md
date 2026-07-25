@@ -5,7 +5,7 @@ model: litellm/fast
 permission:
   edit: deny
   bash:
-    "*": ask
+    "*": allow
     "ls *": allow
     "grep *": allow
     "rg *": allow

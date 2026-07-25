@@ -1,5 +1,8 @@
 #!/bin/bash
-# pipa-extend.sh — merge a project extension bundle on top of the base harness.
+# pipa-extend.sh — DEPRECATED. Merge a project extension bundle on top of the base harness.
+#
+# DEPRECATED: Use .harness_extension/ instead. See README.md "Migration from pipa-extend / squads/".
+# This script remains functional for backward compatibility but will be removed in a future release.
 #
 # An extension bundle is a folder with any of:
 #   AGENTS.md        → appended to the base AGENTS.md (project-specific section)

@@ -1,4 +1,6 @@
-# squads/projects/ — per-project extension bundles
+# squads/projects/ — DEPRECATED
+
+**DEPRECATED**: Use `.harness_extension/` in each project instead. See `README.md` for migration steps.
 
 One bundle per project that adopts the harness. A bundle may contain:
 `AGENTS.md` (appended between markers), `rules/`, `skills/`, `agents/`,

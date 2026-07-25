@@ -26,7 +26,7 @@ echo ""
 if [ ! -d "$TARGET/.harness_extension" ]; then
   echo "  + scaffolding .harness_extension/"
   mkdir -p "$TARGET/.harness_extension"
-  (cd "$HARNESS_SRC/templates/extension" && find . -type f ! -name opencode.jsonc | while read -r f; do
+  (cd "$HARNESS_SRC/templates/extension" && find . -type f ! -name opencode.jsonc ! -path "./.opencode/*" | while read -r f; do
     mkdir -p "$TARGET/.harness_extension/$(dirname "$f")"
     [ -e "$TARGET/.harness_extension/$f" ] || cp "$f" "$TARGET/.harness_extension/$f"
   done)
@@ -44,15 +44,21 @@ fi
 
 # 3. .opencode/ — create and populate if missing
 mkdir -p "$TARGET/.opencode"
-for f in opencode.jsonc setup-script.sh run-script.sh; do
-  src="$HARNESS_SRC/templates/opencode-emdash/$f"
+for f in setup-script.sh run-script.sh; do
+  src="$HARNESS_SRC/templates/extension/.opencode/$f"
   dst="$TARGET/.opencode/$f"
   if [ -f "$src" ] && [ ! -e "$dst" ]; then
     echo "  + .opencode/$f"
     cp "$src" "$dst"
-    [ "$f" != "opencode.jsonc" ] && chmod +x "$dst"
+    chmod +x "$dst"
   fi
 done
+src="$HARNESS_SRC/templates/extension/opencode.jsonc"
+dst="$TARGET/.opencode/opencode.jsonc"
+if [ -f "$src" ] && [ ! -e "$dst" ]; then
+  echo "  + .opencode/opencode.jsonc"
+  cp "$src" "$dst"
+fi
 
 # 3b. .opencode/agent -> .harness_extension/agents (OpenCode subagent discovery)
 if [ ! -e "$TARGET/.opencode/agent" ]; then
@@ -63,15 +69,7 @@ fi
 # 4. .graphifyignore if missing
 if [ ! -e "$TARGET/.graphifyignore" ]; then
   echo "  + .graphifyignore"
-  cat > "$TARGET/.graphifyignore" <<'EOF'
-# graphify scope control
-**/node_modules/**
-**/build/**
-**/dist/**
-**/.git/**
-**/dependencies/**
-graphify-out/**
-EOF
+  cp "$HARNESS_SRC/templates/extension/.graphifyignore" "$TARGET/.graphifyignore"
 fi
 
 # 5. .gitignore entries for harness artifacts

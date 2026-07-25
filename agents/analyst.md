@@ -3,7 +3,7 @@ description: Business analyst. Researches the problem domain, gathers requiremen
 mode: subagent
 model: litellm/deep
 permission:
-  edit: deny
+  edit: allow
   bash:
     "*": deny
     "graphify *": allow

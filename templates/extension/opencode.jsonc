@@ -1,6 +1,27 @@
 {
   "$schema": "https://opencode.ai/config.json",
 
+  "model": "litellm/primary",
+  "small_model": "litellm/fast",
+
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
+      "options": {
+        "baseURL": "http://localhost:4000/v1",
+        "apiKey": "sk-pipa-local"
+      },
+      "models": {
+        "primary": {},
+        "fast": {},
+        "deep": {},
+        "explore": {},
+        "kilo-free": {}
+      }
+    }
+  },
+
   "instructions": [
     "AGENTS.md",
     ".harness_extension/rules/*.md"
@@ -27,6 +48,9 @@
     "context7_*": "allow",
     "skill": { "*": "allow" }
   },
+
+  "subagent_depth": 2,
+  "compaction": { "auto": true, "prune": false, "reserved": 10000 },
 
   "mcp": {
     "context7": {

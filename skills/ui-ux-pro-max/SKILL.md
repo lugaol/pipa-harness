@@ -46,7 +46,7 @@ Extract key information from user request:
 - **Product type**: Entertainment (social, video, music, gaming), Tool (scanner, editor, converter), Productivity (task manager, notes, calendar), or hybrid
 - **Target audience**: C-end consumer users; consider age group, usage context (commute, leisure, work)
 - **Style keywords**: playful, vibrant, minimal, dark mode, content-first, immersive, etc.
-- **Stack**: React Native (this project's only tech stack)
+- **Stack**: <your stack>
 
 ### Step 2: Generate Design System (REQUIRED)
 
@@ -199,7 +199,7 @@ python3 skills/ui-ux-pro-max/scripts/search.py "enterprise tableview density per
 - Product type: Tool (AI search engine)
 - Target audience: C-end users looking for fast, intelligent search
 - Style keywords: modern, minimal, content-first, dark mode
-- Stack: React Native
+- Stack: <your stack>
 
 ### Step 2: Generate Design System (REQUIRED)
 
@@ -222,7 +222,7 @@ python3 skills/ui-ux-pro-max/scripts/search.py "search loading animation" --doma
 ### Step 4: Stack Guidelines
 
 ```bash
-python3 skills/ui-ux-pro-max/scripts/search.py "list performance navigation" --stack react-native
+python3 skills/ui-ux-pro-max/scripts/search.py "list performance navigation" --stack <stack>
 ```
 
 **Then:** Synthesize design system + detailed searches and implement the design.
@@ -264,28 +264,19 @@ python3 skills/ui-ux-pro-max/scripts/search.py "fintech crypto" --design-system 
 | Layout breaks on small screens | Quick Reference §5: `mobile-first` + `breakpoint-consistency` |
 | Performance / jank | Quick Reference §3: `virtualize-lists` + `main-thread-budget` + `debounce-throttle` |
 
-### Pre-Delivery Checklist
-
-- Run `--domain ux "animation accessibility z-index loading"` as a UX validation pass before implementation
-- Run through Quick Reference **§1–§3** (CRITICAL + HIGH) as a final review
-- Test on 375px (small phone) and landscape orientation
-- Verify behavior with **reduced-motion** enabled and **Dynamic Type** at largest size
-- Check dark mode contrast independently (don't assume light mode values work)
-- Confirm all touch targets ≥44pt and no content hidden behind safe areas
-
 ---
 
 ## Common Rules for Professional UI
 
 These are frequently overlooked issues that make UI look unprofessional:
-Scope notice: The rules below are for App UI (iOS/Android/React Native/Flutter), not desktop-web interaction patterns.
+Scope notice: The rules below cover App UI (iOS/Android/React Native/Flutter) and desktop-web interaction patterns.
 
 ### Icons & Visual Elements
 
-- 默认图标库使用 **Phosphor (`@phosphor-icons/react`)**。`src/ui-ux-pro-max/data/icons.csv` 中列出的只是常用推荐图标，不是完整集合。
-- 当推荐表中找不到合适的图标时：
-  - **优先继续从 Phosphor 的完整图标集中选择任何语义更贴切的图标**；
-  - 如果 Phosphor 也没有理想选项，可以使用 **Heroicons (`@heroicons/react`)** 作为备选，注意保持风格一致（线性/填充、笔画粗细、圆角风格）。
+- Default icon library: **Phosphor** (or the equivalent for your stack). The `data/icons.csv` lists common recommendations, not the full set.
+- When the recommendation table lacks a suitable icon:
+  - **Prefer continuing from the full Phosphor icon set** for any semantically closer icon;
+  - If Phosphor has no ideal option, use **Heroicons** as a fallback, keeping style consistent (line/fill, stroke weight, corner style).
 
 | Rule | Standard | Avoid | Why It Matters |
 |------|----------|--------|----------------|

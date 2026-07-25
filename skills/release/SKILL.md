@@ -30,4 +30,4 @@ Cut a versioned release following semver and the project's conventions.
 
 ## Notes
 - If the project has no version file or changelog, say so and ask how the user wants to track versions.
-- Check `harness/vault/decisions/` for any release-policy notes before applying defaults.
+- Check `vault/decisions/` for any release-policy notes before applying defaults.

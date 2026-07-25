@@ -10,7 +10,7 @@
 set -eu
 
 ROLE="${1:-}"; PROMPT="${*:2}"
-[ -n "$ROLE" ] && [ -n "$PROMPT" ] || { echo "usage: $0 <fast|primary|deep|explore> <prompt>" >&2; exit 2; }
+[ -n "$ROLE" ] && [ -n "$PROMPT" ] || { echo "usage: $0 <fast|primary|deep|explore|kilo-free> <prompt>" >&2; exit 2; }
 
 URL="${LITELLM_URL:-http://localhost:4000}"
 KEY="${LITELLM_KEY:-sk-pipa-local}"
@@ -20,7 +20,8 @@ case "$ROLE" in
   primary) MODEL="${LITELLM_MODEL_PRIMARY:-primary}" ;;
   deep)    MODEL="${LITELLM_MODEL_DEEP:-deep}" ;;
   explore) MODEL="${LITELLM_MODEL_EXPLORE:-explore}" ;;
-  *) echo "unknown role: $ROLE (use: fast|primary|deep|explore)" >&2; exit 2 ;;
+  kilo-free) MODEL="${LITELLM_MODEL_KILO_FREE:-kilo-free}" ;;
+  *) echo "unknown role: $ROLE (use: fast|primary|deep|explore|kilo-free)" >&2; exit 2 ;;
 esac
 
 curl -sf "${URL}/v1/chat/completions" \

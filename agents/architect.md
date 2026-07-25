@@ -3,7 +3,7 @@ description: System architect. Designs the technical solution from a PRD. Produc
 mode: subagent
 model: litellm/deep
 permission:
-  edit: deny
+  edit: allow
   bash:
     "*": deny
     "graphify *": allow

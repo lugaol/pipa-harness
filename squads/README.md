@@ -1,4 +1,8 @@
-# squads/ — project extensions + domain bundles
+# squads/ — DEPRECATED
+
+**DEPRECATED**: Use `.harness_extension/` in each project instead. See `README.md` for migration steps.
+
+The `squads/` directory documented the old `pipa-extend.sh` extension model. Projects should migrate to `.harness_extension/`.
 
 Two kinds of extensions live here:
 

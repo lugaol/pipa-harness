@@ -71,12 +71,9 @@ touched. Full SKILL.md content loads on demand, per task stage.
 **Utility**: `@explorer` `@researcher`
 See `agents/*.md` for definitions. Invoke with `@name` in OpenCode.
 ## Project extensions
-Include project-specific rules, skills, and AGENTS.md snippets via:
-```bash
-harness/bin/pipa-extend.sh /path/to/your-project-extension
-```
-Extension bundles live in `squads/projects/<name>/` and are merged on top of
-the base harness. See "Project extensions" in README.md.
+Include project-specific rules, skills, and AGENTS.md snippets via
+`.harness_extension/` in each project. See `README.md` for the migration
+from the deprecated `pipa-extend.sh` / `squads/` model.
 ## Knowledge graph — query BEFORE reading files
 `graphify query "<q>"`, `graphify explain "<Node>"`, `graphify path "A" "B"`.
 Broad review: `graphify-out/GRAPH_REPORT.md`. Fallback to grep, no error.

@@ -3,7 +3,7 @@ description: Scrum master. Bridges Phase 1→2: turns a spec (briefing+PRD+archi
 mode: subagent
 model: litellm/deep
 permission:
-  edit: deny
+  edit: allow
   bash:
     "*": deny
     "ls *": allow

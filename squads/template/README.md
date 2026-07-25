@@ -1,4 +1,6 @@
-# Squad / Project Extension Template
+# Squad / Project Extension Template — DEPRECATED
+
+**DEPRECATED**: Use `.harness_extension/` in each project instead. See `README.md` for migration steps.
 
 Copy this folder to `squads/projects/<your-project>/` and fill it in.
 Run `harness/bin/pipa-extend.sh squads/projects/<your-project>` to merge it

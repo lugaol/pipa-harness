@@ -245,7 +245,28 @@ pull_models() {
   [ "$PULL_MODELS" = 1 ] || return 0
   have ollama || return 0
   curl -s -m 2 -o /dev/null "http://localhost:$OLLAMA_PORT" || return 0
-  models="$(grep 'model: openai/' "$CONFIG" | grep -v '^[[:space:]]*#' | sed 's/.*openai\///; s/ *#.*//; s/ *$//' | sort -u)"
+  models="$(awk '
+    /^- model_name:/ { in_model = 1 }
+    in_model && /model: openai\// { model_line = $0 }
+    in_model && /api_base:.*localhost:11434/ { pull = 1 }
+    in_model && /^[^[:space:]]/ {
+      if (pull && model_line) {
+        sub(/.*openai\//, "", model_line)
+        sub(/ *#.*/, "", model_line)
+        sub(/[[:space:]]*$/, "", model_line)
+        print model_line
+      }
+      in_model = 0; pull = 0; model_line = ""
+    }
+    END {
+      if (pull && model_line) {
+        sub(/.*openai\//, "", model_line)
+        sub(/ *#.*/, "", model_line)
+        sub(/[[:space:]]*$/, "", model_line)
+        print model_line
+      }
+    }
+  ' "$CONFIG" | sort -u)"
   for m in $models; do
     if ollama list | awk '{print $1}' | grep -qx "$m"; then
       ok "model present: $m"
@@ -314,36 +335,11 @@ setup_global_opencode() {
 
 scaffold_project() {
   target="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
-  [ "$target" = "$ROOT" ] && return 0          # inside pipa itself: no scaffold
-  ext="$target/.harness_extension"
-
-  if [ -d "$ext" ]; then
-    ok ".harness_extension/ exists ($target)"
-  else
-    [ "$MODE" = status ] && { warn "project not scaffolded: $target (run pipa-up here)"; return; }
-    add "scaffolding .harness_extension/ in $target"
-    mkdir -p "$ext"
-    (cd "$ROOT/templates/extension" && find . -type f ! -name opencode.jsonc | while read -r f; do
-      mkdir -p "$ext/$(dirname "$f")"
-      [ -e "$ext/$f" ] || cp "$f" "$ext/$f"
-    done)
-  fi
-
-  if [ ! -e "$target/AGENTS.md" ]; then
-    [ "$MODE" != status ] && { ln -s .harness_extension/AGENTS.md "$target/AGENTS.md"; add "AGENTS.md -> .harness_extension/AGENTS.md"; }
-  fi
-
-  mkdir -p "$target/.opencode"
-  if [ ! -e "$target/.opencode/opencode.jsonc" ] && [ "$MODE" != status ]; then
-    cp "$ROOT/templates/extension/opencode.jsonc" "$target/.opencode/opencode.jsonc"
-    add ".opencode/opencode.jsonc"
-  fi
-  if [ ! -e "$target/.opencode/agent" ] && [ "$MODE" != status ]; then
-    ln -s ../.harness_extension/agents "$target/.opencode/agent"
-    add ".opencode/agent -> .harness_extension/agents"
-  fi
-
-  if [ ! -e "$target/pipa-up" ] && [ "$MODE" != status ]; then
+  [ "$target" = "$ROOT" ] && return 0
+  [ "$MODE" = status ] && { warn "project not scaffolded: $target (run pipa-up here)"; return; }
+  add "scaffolding project in $target"
+  (cd "$target" && "$ROOT/install.sh") || warn "install.sh failed for $target"
+  if [ ! -e "$target/pipa-up" ]; then
     cp "$ROOT/templates/extension/pipa-up" "$target/pipa-up"
     chmod +x "$target/pipa-up"
     add "pipa-up -> project root"

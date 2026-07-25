@@ -31,7 +31,7 @@ Project-agnostic agent harness. Start here.
 - [[AGENTS]] — always-loaded router (philosophy, rules, routing, models)
 - [[README]] — full usage guide + install + extensions
 - [[specs/README]] — two-phase plan→story workflow
-- [[squads/README]] — project extensions + domain bundles
+- [[README]] — full usage guide + install + extensions
 - [[vault/decisions/000-template|Decision template]] — architectural memory
 - [[state/SESSION]] — warm session resume
 - [[state/PLAN]] — in-session work ledger
@@ -44,7 +44,7 @@ LAYER 2  skills/*/SKILL.md          → auto-discovered by OpenCode on trigger
 LAYER 3  specs/<feature>/           → plan→story workflow (file-driven context)
 LAYER 4  graphify-out/ + vault/      → queried memory (MCP + files), never injected
 LAYER 5  agents/*.md                 → OpenCode subagents (analyst, pm, architect, sm, dev, qa, explorer, researcher)
-LAYER 6  squads/projects/<name>/    → project extensions (merged via pipa-extend.sh)
+LAYER 6  .harness_extension/        → project extensions (project-local rules, skills, agents)
 ```
 
 ## Open this as an Obsidian vault

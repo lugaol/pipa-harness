@@ -11,8 +11,8 @@ each running its own agent CLI (OpenCode, Claude Code, Codex, etc.).
 3. Copy the worktree scripts so emdash bootstraps each worktree:
    ```bash
    mkdir -p .opencode
-   cp harness/templates/opencode-emdash/setup-script.sh .opencode/
-   cp harness/templates/opencode-emdash/run-script.sh   .opencode/
+   cp templates/opencode-emdash/setup-script.sh .opencode/
+   cp templates/opencode-emdash/run-script.sh   .opencode/
    chmod +x .opencode/*.sh
    ```
    emdash runs `setup-script.sh` on worktree creation and `run-script.sh` when
@@ -23,7 +23,7 @@ each running its own agent CLI (OpenCode, Claude Code, Codex, etc.).
 When creating a task in emdash, select **OpenCode** as the provider. OpenCode
 reads `.opencode/opencode.jsonc` which points at the LiteLLM gateway
 (`http://localhost:4000`). All models flow through the aliases defined in
-`harness/config/litellm.yaml`.
+`config/litellm.yaml`.
 
 ## Workflow
 

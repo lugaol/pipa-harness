@@ -8,7 +8,7 @@ set -u
 URL="${LITELLM_URL:-http://localhost:4000}"
 KEY="${LITELLM_KEY:-sk-pipa-local}"
 
-P_BUILD='Classify this build error into exactly one category (A=C++/NDK, B=Gradle/Kotlin, C=Asset/Resource, D=Config) and name the file to open. Reply "CATEGORY: X | FILE: path | HINT: one line".
+P_BUILD='Classify this build error into exactly one category (A=Compile, B=Linker, C=Config, D=Asset) and name the file to open. Reply "CATEGORY: X | FILE: path | HINT: one line".
 Error:
 > Task :app:mergeDebugNativeLibs FAILED
   undefined reference to `AudioStreamBuilder::setCallback`'

@@ -4,7 +4,7 @@ description: "Review code changes for quality, security, and correctness. Trigge
 ---
 # Code review
 
-Review changes (staged, unstaged, or a branch diff) against the rules in `harness/rules/`.
+Review changes (staged, unstaged, or a branch diff) against the rules in `rules/`.
 
 ## Method
 1. Get the diff: `git diff` (unstaged), `git diff --cached` (staged), or `git diff main...HEAD` (branch).

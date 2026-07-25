@@ -1,4 +1,3 @@
 #!/bin/bash
 # pipa-up — start/check pipa harness from project root
-SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
-exec "$SCRIPT_DIR/../pipa_harness/bin/pipa-up.sh" "$@"
+exec pipa-up.sh "$@"

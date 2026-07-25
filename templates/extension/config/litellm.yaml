@@ -22,8 +22,8 @@
   },
 
   "instructions": [
-    "@PIPA_ROOT@/AGENTS.md",
-    "@PIPA_ROOT@/rules/*.md"
+    "AGENTS.md",
+    ".harness_extension/rules/*.md"
   ],
 
   "permission": {
@@ -41,14 +41,15 @@
       "git diff*": "allow",
       "git log*": "allow",
       "git branch*": "allow",
-      "graphify *": "allow",
-      "python3 @PIPA_ROOT@/bin/harness_status.py*": "allow",
-      "@PIPA_ROOT@/bin/pipa-up.sh*": "allow"
+      "graphify *": "allow"
     },
     "graphify_*": "allow",
     "context7_*": "allow",
     "skill": { "*": "allow" }
   },
+
+  "subagent_depth": 2,
+  "compaction": { "auto": true, "prune": false, "reserved": 10000 },
 
   "mcp": {
     "context7": {
@@ -59,7 +60,5 @@
     }
   },
 
-  "subagent_depth": 2,
-  "compaction": { "auto": true, "prune": false, "reserved": 10000 },
   "watcher": { "ignore": ["node_modules/**", "dist/**", "build/**", ".git/**", "graphify-out/**"] }
 }

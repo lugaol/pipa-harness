@@ -30,8 +30,17 @@ if ok:
         pass
 check("litellm", ok, f"{len(models)} models: {', '.join(models[:4])}" if models else "gateway up, no models")
 
+def git_root() -> Path:
+    try:
+        out = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True, timeout=5)
+        if out.returncode == 0:
+            return Path(out.stdout.strip())
+    except Exception:
+        pass
+    return Path.cwd()
+
 # graphify
-gpath = Path(".graphifyignore").parent / "graphify-out" / "graph.json"
+gpath = git_root() / "graphify-out" / "graph.json"
 gok = gpath.exists()
 check("graphify-graph", gok, "graph.json present" if gok else "no graph yet — run: graphify extract .")
 

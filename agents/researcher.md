@@ -3,7 +3,7 @@ description: Deep research — papers, benchmarks, API docs, external library be
 mode: subagent
 model: litellm/deep
 permission:
-  edit: deny
+  edit: allow
   bash:
     "*": deny
     "graphify *": allow
@@ -21,7 +21,7 @@ You are a researcher. You investigate external topics (libraries, algorithms, be
 3. Cross-reference the local codebase via graphify/grep when relevant.
 
 ## Output
-1. Write a dated note to `harness/vault/research/` with full findings + `as_of`/`valid_until` frontmatter.
+  1. Write a dated note to `vault/research/` with full findings + `as_of`/`valid_until` frontmatter.
 2. Return a ≤ 5-line summary with the key conclusion and the vault note path.
 - Never dump raw webpage content. Synthesize.
 - Citations protocol: every fact that came from a search gets an inline source

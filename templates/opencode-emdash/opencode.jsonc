@@ -42,7 +42,6 @@
       "git branch*": "allow",
       "graphify *": "allow",
       "python3 harness/bin/harness_status.py*": "allow",
-      "sh harness/bin/pipa-extend.sh *": "allow",
       "litellm *": "allow"
     },
     "graphify_*": "allow",
