@@ -1,4 +1,4 @@
-INFO:     Started server process [95552]
+INFO:     Started server process [13638]
 INFO:     Waiting for application startup.
 
    ██╗     ██╗████████╗███████╗██╗     ██╗     ███╗   ███╗
@@ -8,21 +8,22 @@ INFO:     Waiting for application startup.
    ███████╗██║   ██║   ███████╗███████╗███████╗██║ ╚═╝ ██║
    ╚══════╝╚═╝   ╚═╝   ╚══════╝╚══════╝╚══════╝╚═╝     ╚═╝
 
-[92m20:11:27 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=5dd1d82f03f773018cfd4c62a4ed1698f3c4bfa1f2149c7a679eea1caeebe49c not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
-[92m20:11:27 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=openai/gpt-oss:20b not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
-[92m20:11:27 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=8b7602ffdceb8f08fa14a8d8e2dd61770cabff93cefc4205a63df51daebf7a62 not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
-[92m20:11:27 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=openai/qwen3:8b not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
-[92m20:11:27 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=ca95c8f20267e64e838a8b4971f4afb078fb8fd840054e39b9e0f1358491010b not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
-[92m20:11:27 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=30bf440dc18dfaf7f63309b6632b32f767e615f7f66ef9124247c8613e6714ce not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
+[92m22:18:43 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=6a8ab1da7cbafd4e7666dffd39f53687d34d830de73e40f3ce446020be3fc1ee not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
+[92m22:18:43 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=openai/stepfun/step-3.7-flash:free not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
+[92m22:18:43 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=8b7602ffdceb8f08fa14a8d8e2dd61770cabff93cefc4205a63df51daebf7a62 not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
+[92m22:18:43 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=openai/qwen3:8b not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
+[92m22:18:43 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=ca95c8f20267e64e838a8b4971f4afb078fb8fd840054e39b9e0f1358491010b not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
+[92m22:18:43 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=openai/gpt-oss:20b not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
+[92m22:18:43 - LiteLLM:WARNING[0m: utils.py:2730 - register_model: model=30bf440dc18dfaf7f63309b6632b32f767e615f7f66ef9124247c8613e6714ce not in built-in cost map and no prefix/region variant matched; cache cost fields will default to 0. To track cache cost, add cache_creation_input_token_cost and cache_read_input_token_cost to model_info
 INFO:     Application startup complete.
 INFO:     Uvicorn running on http://0.0.0.0:4000 (Press CTRL+C to quit)
-[92m20:11:29 - LiteLLM Proxy:ERROR[0m: auth_exception_handler.py:97 - litellm.proxy.proxy_server.user_api_key_auth(): Exception occured - No api key passed in.
+[92m22:18:43 - LiteLLM Proxy:ERROR[0m: auth_exception_handler.py:97 - litellm.proxy.proxy_server.user_api_key_auth(): Exception occured - No api key passed in.
 Requester IP Address:127.0.0.1
 Traceback (most recent call last):
   File "/Users/noname/.local/share/uv/tools/litellm/lib/python3.13/site-packages/litellm/proxy/auth/user_api_key_auth.py", line 1404, in _user_api_key_auth_builder
     raise Exception("No api key passed in.")
 Exception: No api key passed in.
-[92m20:11:29 - LiteLLM Proxy:ERROR[0m: proxy_server.py:1411 - Unhandled exception in request: ModuleNotFoundError
+[92m22:18:43 - LiteLLM Proxy:ERROR[0m: proxy_server.py:1411 - Unhandled exception in request: ModuleNotFoundError
 Traceback (most recent call last):
   File "/Users/noname/.local/share/uv/tools/litellm/lib/python3.13/site-packages/litellm/proxy/auth/user_api_key_auth.py", line 1404, in _user_api_key_auth_builder
     raise Exception("No api key passed in.")
@@ -107,7 +108,7 @@ ModuleNotFoundError: No module named 'prisma'
 
 [1;37m#------------------------------------------------------------#[0m
 [1;37m#                                                            #[0m
-[1;37m#           'It would help me if you could add...'            #[0m
+[1;37m#         'The worst thing about this product is...'          #[0m
 [1;37m#        https://github.com/BerriAI/litellm/issues/new        #[0m
 [1;37m#                                                            #[0m
 [1;37m#------------------------------------------------------------#[0m
@@ -124,7 +125,7 @@ ModuleNotFoundError: No module named 'prisma'
 [32m    fast[0m
 [32m    deep[0m
 [32m    explore[0m
-INFO:     127.0.0.1:51280 - "GET /v1/models HTTP/1.1" 500 Internal Server Error
+INFO:     127.0.0.1:49826 - "GET /v1/models HTTP/1.1" 500 Internal Server Error
 ERROR:    Exception in ASGI application
 Traceback (most recent call last):
   File "/Users/noname/.local/share/uv/tools/litellm/lib/python3.13/site-packages/litellm/proxy/auth/user_api_key_auth.py", line 1404, in _user_api_key_auth_builder
@@ -223,15 +224,36 @@ Traceback (most recent call last):
   File "/Users/noname/.local/share/uv/tools/litellm/lib/python3.13/site-packages/litellm/proxy/db/exception_handler.py", line 46, in is_database_connection_error
     import prisma
 ModuleNotFoundError: No module named 'prisma'
-INFO:     127.0.0.1:51282 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51600 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51602 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51629 - "POST /v1/chat/completions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:51642 - "POST /v1/chat/completions HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52029 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52045 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52067 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52069 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52078 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52080 - "GET /v1/models HTTP/1.1" 200 OK
-INFO:     127.0.0.1:52138 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49828 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49831 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49845 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49849 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49853 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49857 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49862 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49868 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49873 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49879 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49884 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49891 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49904 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49915 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49928 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49936 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49969 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49913 - "POST /v1/chat/completions HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49975 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49981 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49986 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:49995 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50003 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50008 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50040 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50085 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50116 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50154 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50179 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50188 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50216 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50245 - "GET /v1/models HTTP/1.1" 200 OK
+INFO:     127.0.0.1:50310 - "GET /v1/models HTTP/1.1" 200 OK
