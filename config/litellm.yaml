@@ -1,9 +1,9 @@
 model_list:
 - model_name: primary
   litellm_params:
-    model: stepfun/step-3.7-flash:free
-    api_base: https://api.kilo.ai/api/gateway
-    api_key: os.environ/KILO_API_KEY
+    model: openai/gpt-oss:20b
+    api_base: http://localhost:11434/v1
+    api_key: ollama
 - model_name: fast
   litellm_params:
     model: openai/qwen3:8b
@@ -11,7 +11,7 @@ model_list:
     api_key: ollama
 - model_name: deep
   litellm_params:
-    model: openai/gpt-oss:20b
+    model: openai/qwen3:4b
     api_base: http://localhost:11434/v1
     api_key: ollama
 - model_name: explore
@@ -19,6 +19,11 @@ model_list:
     model: openai/qwen3:8b
     api_base: http://localhost:11434/v1
     api_key: ollama
+- model_name: kilo-free
+  litellm_params:
+    model: openai/stepfun/step-3.7-flash:free
+    api_base: https://api.kilo.ai/api/gateway
+    api_key: os.environ/KILO_API_KEY
 litellm_settings:
   drop_params: true
   num_retries: 2

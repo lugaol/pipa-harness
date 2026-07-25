@@ -142,10 +142,101 @@ def tools_status() -> dict:
         tools.append({"name": "dashboard", "path": str(dash.relative_to(ROOT)), "exec": True})
     return {"pipa_tools": tools}
 
+# ── kilo free models parser ──────────────────────────────────────────────────
+
+KILO_API_URL = "https://api.kilo.ai/api/gateway/models"
+
+def _get_kilo_api_key() -> str:
+    locations = [
+        Path(__file__).resolve().parent.parent.parent.parent / ".env",
+        Path.home() / ".harness_extensions_registry" / ".env",
+    ]
+    for env_file in locations:
+        if env_file.exists():
+            for line in env_file.read_text().splitlines():
+                if line.startswith("KILO_API_KEY="):
+                    return line.split("=", 1)[1].strip().strip('"').strip("'")
+    return "sk-pipa-local"
+
+def fetch_kilo_free_models() -> list[dict]:
+    """Query the Kilo Code API for all available models and return those
+    that are free (contain ':free' in id, or are known free-tier providers)."""
+    free = []
+    api_key = _get_kilo_api_key()
+    try:
+        r = subprocess.run(
+            ["curl", "-sf", KILO_API_URL,
+             "-H", f"Authorization: Bearer {api_key}"],
+            capture_output=True, text=True, timeout=10
+        )
+        if r.returncode != 0 or not r.stdout.strip():
+            return free
+        data = json.loads(r.stdout)
+        for m in data.get("data", []):
+            mid = m.get("id", "")
+            # Free models: explicit :free suffix, or known free providers
+            is_free = (
+                ":free" in mid or
+                mid in ("openrouter/free",) or
+                mid.startswith("kilo-auto/")
+            )
+            if is_free:
+                provider = _infer_provider(mid)
+                free.append({
+                    "id": mid,
+                    "provider": provider,
+                    "model": mid,
+                    "api_base": "https://api.kilo.ai/api/gateway",
+                    "api_key": "os.environ/KILO_API_KEY",
+                    "description": f"{provider} — free via Kilo Code",
+                })
+    except Exception:
+        pass
+    return free
+
+def _infer_provider(model_id: str) -> str:
+    mid = model_id.lower()
+    if mid.startswith("stepfun") or "step" in mid: return "StepFun"
+    if mid.startswith("inclusionai") or "ling" in mid: return "InclusionAI"
+    if mid.startswith("poolside") or "laguna" in mid: return "Poolside"
+    if mid.startswith("nvidia") or "nemotron" in mid: return "NVIDIA"
+    if mid.startswith("kwaipilot") or "kat-coder" in mid: return "Kwaipilot"
+    if mid.startswith("cohere"): return "Cohere"
+    if mid.startswith("openrouter"): return "OpenRouter"
+    if mid.startswith("kilo-auto"): return "Kilo Auto"
+    return "Kilo Gateway"
+
+def fetch_ollama_models() -> list[dict]:
+    """Query the local Ollama daemon (:11434) for installed models."""
+    models = []
+    try:
+        r = subprocess.run(
+            ["curl", "-sf", "-m", "3", "http://localhost:11434/api/tags"],
+            capture_output=True, text=True, timeout=5
+        )
+        if r.returncode != 0 or not r.stdout.strip():
+            return models
+        data = json.loads(r.stdout)
+        for m in data.get("models", []):
+            name = m.get("name", "")
+            if not name:
+                continue
+            models.append({
+                "id": name,
+                "provider": "Ollama (local)",
+                "model": f"openai/{name}",
+                "api_base": "http://localhost:11434/v1",
+                "api_key": "ollama",
+                "description": f"Local Ollama model — {name}",
+            })
+    except Exception:
+        pass
+    return models
+
 # ── litellm config ─────────────────────────────────────────────────────────
 
 PRESET_MODELS = [
-    {"id": "step-3.7-flash:free", "provider": "Kilo Code (free)", "model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "description": "Step 3.7 Flash — free via Kilo Code"},
+    {"id": "step-3.7-flash:free", "provider": "Kilo Code (free)", "model": "openai/stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "description": "Step 3.7 Flash — free via Kilo Code"},
     {"id": "gpt-oss:20b", "provider": "Ollama (local)", "model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 20B — primary coding"},
     {"id": "qwen3:8b", "provider": "Ollama (local)", "model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 8B — fast, tool-calling"},
     {"id": "kimi-k2:free", "provider": "Kimi (cloud)", "model": "openai/kimi-k2", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "description": "Kimi free tier"},
@@ -184,25 +275,108 @@ def reload_litellm() -> tuple[bool, str]:
             pass
     return False, "no pid file — restart gateway manually"
 
+# ── merged presets (static + live ollama + live kilo free) ──────────────────
+
+def _preset_group(p: dict) -> str:
+    b = (p.get("api_base") or "").lower()
+    if "kilo.ai" in b: return "kilo"
+    if "11434" in b or "localhost" in b: return "ollama"
+    if "moonshot" in b: return "kimi"
+    return "other"
+
+def all_presets() -> list[dict]:
+    """Static presets + installed Ollama models + live Kilo free models,
+    deduped by id, each tagged with a 'group' for the UI picker."""
+    merged, seen = [], set()
+    for p in PRESET_MODELS + fetch_ollama_models() + fetch_kilo_free_models():
+        if p.get("id") in seen:
+            continue
+        seen.add(p.get("id"))
+        q = dict(p)
+        q["group"] = _preset_group(q)
+        merged.append(q)
+    return merged
+
+# ── .env API-key store ───────────────────────────────────────────────────────
+
+ENV_FILE = ROOT / ".env"
+ENV_KEYS = ("KILO_API_KEY", "KIMI_API_KEY")
+
+def read_env_file() -> dict:
+    values = {}
+    if ENV_FILE.exists():
+        for line in ENV_FILE.read_text().splitlines():
+            if "=" in line and not line.lstrip().startswith("#"):
+                k, v = line.split("=", 1)
+                values[k.strip()] = v.strip().strip('"').strip("'")
+    return values
+
+def _mask(v: str) -> str:
+    return f"{v[:4]}…{v[-4:]}" if len(v) > 8 else "•••"
+
+@app.get("/api/env-keys")
+def api_get_env_keys():
+    values = read_env_file()
+    return JSONResponse({
+        k: {"set": bool(values.get(k)), "masked": _mask(values[k]) if values.get(k) else ""}
+        for k in ENV_KEYS
+    })
+
+@app.post("/api/env-keys")
+def api_set_env_key(payload: dict):
+    key = payload.get("key", "")
+    value = (payload.get("value") or "").strip()
+    if key not in ENV_KEYS:
+        raise HTTPException(400, f"unknown key — allowed: {', '.join(ENV_KEYS)}")
+    if not value or any(c in value for c in " \t\r\n"):
+        raise HTTPException(400, "value must be non-empty and contain no whitespace")
+    lines = ENV_FILE.read_text().splitlines() if ENV_FILE.exists() else []
+    out, done = [], False
+    for line in lines:
+        if line.startswith(f"{key}="):
+            out.append(f"{key}={value}")
+            done = True
+        else:
+            out.append(line)
+    if not done:
+        out.append(f"{key}={value}")
+    ENV_FILE.write_text("\n".join(out) + "\n")
+    return JSONResponse({"ok": True, "key": key, "masked": _mask(value)})
+
 @app.post("/api/gateway/restart")
 def api_restart_gateway():
+    """Kill the gateway and start a fresh one with the current .env loaded,
+    so newly saved API keys take effect without leaving the dashboard."""
+    import shutil, time
     pidfile = STATE / "litellm.pid"
     if pidfile.exists():
         try:
-            pid = int(pidfile.read_text().strip())
-            subprocess.run(["kill", str(pid)], capture_output=True, timeout=2)
+            subprocess.run(["kill", int(pidfile.read_text().strip())], capture_output=True, timeout=2)
+            time.sleep(1.5)
         except Exception:
             pass
-    import time
-    time.sleep(1)
-    cfg = parse_litellm_config()
-    model_list = cfg.get("model_list", [])
-    if not model_list:
-        return JSONResponse({"ok": False, "detail": "no models in config"})
-    log = STATE / "litellm.log"
-    with open(log, "a") as lf:
-        lf.write("\n[manual restart from dashboard]\n")
-    return JSONResponse({"ok": True, "detail": "stopped — run pipa-up.sh to restart"})
+    binary = shutil.which("litellm")
+    if not binary:
+        return JSONResponse({"ok": False, "detail": "litellm binary not found on PATH"})
+    env = dict(os.environ)
+    env.update({k: v for k, v in read_env_file().items() if v})
+    STATE.mkdir(exist_ok=True)
+    log = open(STATE / "litellm.log", "a")
+    log.write("\n[restart from dashboard]\n")
+    log.flush()
+    proc = subprocess.Popen(
+        [binary, "--config", str(LITELLM_CONFIG), "--port", "4000"],
+        stdout=log, stderr=subprocess.STDOUT, start_new_session=True,
+        env=env, cwd=str(ROOT),
+    )
+    pidfile.write_text(str(proc.pid))
+    for _ in range(20):
+        ok, _ = cmd_ok(["curl", "-sf", "-m", "2", "http://localhost:4000/v1/models",
+                        "-H", "Authorization: Bearer sk-pipa-local"])
+        if ok:
+            return JSONResponse({"ok": True, "detail": f"gateway restarted (pid {proc.pid})"})
+        time.sleep(2)
+    return JSONResponse({"ok": False, "detail": "gateway did not come up — see state/litellm.log"})
 
 @app.get("/api/models")
 def api_list_models():
@@ -216,7 +390,14 @@ def api_list_models():
             "api_base": params.get("api_base", ""),
             "api_key": params.get("api_key", ""),
         }
-    return JSONResponse({"aliases": aliases, "presets": PRESET_MODELS})
+    # Merge static presets with installed Ollama models and live Kilo free models
+    return JSONResponse({"aliases": aliases, "presets": all_presets()})
+
+@app.get("/api/kilo-free-models")
+def api_kilo_free_models():
+    """Return live list of free models available on the Kilo Code gateway."""
+    models = fetch_kilo_free_models()
+    return JSONResponse({"models": models, "count": len(models)})
 
 @app.post("/api/models/{alias}")
 def api_set_model(alias: str, payload: dict):
@@ -228,7 +409,7 @@ def api_set_model(alias: str, payload: dict):
     cfg = parse_litellm_config()
     model_list = cfg.get("model_list", [])
 
-    preset = next((p for p in PRESET_MODELS if p["id"] == preset_id), None)
+    preset = next((p for p in all_presets() if p["id"] == preset_id), None)
     if preset:
         model = preset["model"]
         api_base = preset["api_base"]
@@ -268,7 +449,7 @@ def api_set_model(alias: str, payload: dict):
 @app.post("/api/models/{alias}/reset")
 def api_reset_model(alias: str):
     defaults = {
-        "primary": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY"},
+        "primary": {"model": "openai/stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY"},
         "fast": {"model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
         "deep": {"model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},
         "explore": {"model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama"},

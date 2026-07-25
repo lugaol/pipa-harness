@@ -3,446 +3,1719 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>pipa_harness dashboard</title>
+<title>pipa_harness — Operations Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
 <style>
-  :root {
-    --bg: #0b0d12;
-    --panel: #11151c;
-    --panel-2: #161b24;
-    --border: #21262e;
-    --text: #e6edf3;
-    --muted: #8b949e;
-    --green: #3fb950;
-    --red: #f85149;
-    --yellow: #d29922;
-    --blue: #58a6ff;
-    --purple: #bc8cff;
-    --orange: #f0883e;
+/* ═══════════════════════════════════════════════════════════
+   CSS VARIABLES — Single source of truth for theming
+   ═══════════════════════════════════════════════════════════ */
+:root {
+  /* Primary palette — Modern Dark (Cinema) */
+  --bg-base:        #0B0D12;
+  --bg-surface:     #11131A;
+  --bg-card:        #161821;
+  --bg-elevated:    #1C1E29;
+  --bg-hover:       #212330;
+
+  /* Accent colors */
+  --accent-primary:  #3B82F6;
+  --accent-secondary:#6366F1;
+  --accent-green:    #22C55E;
+  --accent-red:      #EF4444;
+  --accent-yellow:   #EAB308;
+  --accent-orange:   #F97316;
+  --accent-purple:   #A855F7;
+  --accent-cyan:     #06B6D4;
+  --accent-pink:     #EC4899;
+
+  /* Text */
+  --text-primary:   #F1F5F9;
+  --text-secondary: #94A3B8;
+  --text-muted:     #64748B;
+  --text-inverse:   #0B0D12;
+
+  /* Borders & dividers */
+  --border-subtle:  rgba(255,255,255,0.06);
+  --border-default: rgba(255,255,255,0.10);
+  --border-strong:  rgba(255,255,255,0.15);
+
+  /* Shadows & glows */
+  --shadow-sm:    0 1px 3px rgba(0,0,0,0.4);
+  --shadow-md:    0 4px 12px rgba(0,0,0,0.5);
+  --shadow-lg:    0 8px 32px rgba(0,0,0,0.6);
+  --glow-primary: 0 0 20px rgba(59,130,246,0.15);
+  --glow-green:   0 0 16px rgba(34,197,94,0.2);
+
+  /* Glassmorphism */
+  --glass-bg:     rgba(22,24,33,0.75);
+  --glass-border: rgba(255,255,255,0.08);
+  --glass-blur:   12px;
+
+  /* Typography */
+  --font-sans: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: 'JetBrains Mono', 'SF Mono', 'Fira Code', monospace;
+
+  /* Spacing scale (8px grid) */
+  --sp-1: 4px;  --sp-2: 8px;  --sp-3: 12px;  --sp-4: 16px;
+  --sp-5: 20px; --sp-6: 24px; --sp-8: 32px;  --sp-10: 40px;
+  --sp-12: 48px; --sp-16: 64px;
+
+  /* Border radius */
+  --radius-sm: 6px;
+  --radius-md: 10px;
+  --radius-lg: 14px;
+  --radius-xl: 18px;
+
+  /* Transitions */
+  --ease-out: cubic-bezier(0.16, 1, 0.3, 1);
+  --ease-spring: cubic-bezier(0.34, 1.56, 0.64, 1);
+  --duration-fast: 150ms;
+  --duration-normal: 250ms;
+  --duration-slow: 400ms;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RESET & BASE
+   ═══════════════════════════════════════════════════════════ */
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+html {
+  font-size: 14px;
+  scroll-behavior: smooth;
+}
+
+body {
+  font-family: var(--font-sans);
+  background: var(--bg-base);
+  color: var(--text-primary);
+  line-height: 1.6;
+  min-height: 100vh;
+  overflow-x: hidden;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Ambient background blobs */
+body::before, body::after {
+  content: '';
+  position: fixed;
+  border-radius: 50%;
+  filter: blur(80px);
+  opacity: 0.04;
+  z-index: 0;
+  pointer-events: none;
+}
+body::before {
+  width: 600px; height: 600px;
+  background: var(--accent-primary);
+  top: -200px; left: -100px;
+  animation: floatBlob 20s ease-in-out infinite;
+}
+body::after {
+  width: 500px; height: 500px;
+  background: var(--accent-purple);
+  bottom: -150px; right: -100px;
+  animation: floatBlob 25s ease-in-out infinite reverse;
+}
+
+@keyframes floatBlob {
+  0%, 100% { transform: translate(0, 0) scale(1); }
+  33% { transform: translate(40px, -30px) scale(1.05); }
+  66% { transform: translate(-20px, 20px) scale(0.95); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLLBAR
+   ═══════════════════════════════════════════════════════════ */
+::-webkit-scrollbar { width: 6px; height: 6px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: var(--border-strong); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════════
+   LAYOUT — CSS Grid sidebar + main content
+   ═══════════════════════════════════════════════════════════ */
+.app-layout {
+  display: grid;
+  grid-template-columns: 260px 1fr;
+  min-height: 100vh;
+  position: relative;
+  z-index: 1;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SIDEBAR
+   ═══════════════════════════════════════════════════════════ */
+.sidebar {
+  background: var(--bg-surface);
+  border-right: 1px solid var(--border-subtle);
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  position: sticky;
+  top: 0;
+  height: 100vh;
+  overflow-y: auto;
+}
+
+.sidebar-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-3);
+  padding-bottom: var(--sp-4);
+  border-bottom: 1px solid var(--border-subtle);
+}
+
+.sidebar-logo {
+  width: 36px; height: 36px;
+  background: linear-gradient(135deg, var(--accent-primary), var(--accent-purple));
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  font-weight: 800; font-size: 16px; color: #fff;
+  flex-shrink: 0;
+}
+
+.sidebar-brand-text h1 {
+  font-size: 15px; font-weight: 700;
+  letter-spacing: -0.3px;
+  line-height: 1.3;
+}
+.sidebar-brand-text p {
+  font-size: 11px; color: var(--text-muted);
+  margin-top: 1px;
+}
+
+/* Navigation */
+.nav-section { display: flex; flex-direction: column; gap: var(--sp-1); }
+.nav-label {
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 1px;
+  color: var(--text-muted);
+  padding: 0 var(--sp-2);
+  margin-bottom: var(--sp-1);
+}
+
+.nav-item {
+  display: flex; align-items: center; gap: var(--sp-3);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  cursor: pointer;
+  transition: background var(--duration-fast) var(--ease-out),
+              color var(--duration-fast) var(--ease-out);
+  font-size: 13px; font-weight: 500;
+  color: var(--text-secondary);
+  border: none; background: none;
+  width: 100%; text-align: left;
+  font-family: var(--font-sans);
+}
+.nav-item:hover { background: var(--bg-hover); color: var(--text-primary); }
+.nav-item.active { background: rgba(59,130,246,0.1); color: var(--accent-primary); }
+
+.nav-item svg { width: 16px; height: 16px; flex-shrink: 0; }
+
+/* Sidebar footer */
+.sidebar-footer {
+  margin-top: auto;
+  padding-top: var(--sp-4);
+  border-top: 1px solid var(--border-subtle);
+}
+
+.status-pill {
+  display: flex; align-items: center; gap: var(--sp-2);
+  font-size: 12px; color: var(--text-secondary);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+}
+.status-dot {
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-dot.online { background: var(--accent-green); box-shadow: 0 0 8px rgba(34,197,94,0.4); }
+.status-dot.offline { background: var(--accent-red); box-shadow: 0 0 8px rgba(239,68,68,0.4); }
+.status-dot.idle { background: var(--accent-yellow); box-shadow: 0 0 8px rgba(234,179,8,0.4); }
+
+/* ═══════════════════════════════════════════════════════════
+   MAIN CONTENT
+   ═══════════════════════════════════════════════════════════ */
+.main-content {
+  padding: var(--sp-6);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-6);
+  overflow-y: auto;
+  max-height: 100vh;
+}
+
+/* Top bar */
+.top-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--sp-4);
+  flex-wrap: wrap;
+}
+
+.top-bar h2 {
+  font-size: 22px; font-weight: 700;
+  letter-spacing: -0.5px;
+  line-height: 1.3;
+}
+.top-bar .subtitle {
+  font-size: 13px; color: var(--text-muted);
+  margin-top: 2px;
+}
+
+.top-bar-actions {
+  display: flex; gap: var(--sp-2);
+  align-items: center;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   BUTTONS
+   ═══════════════════════════════════════════════════════════ */
+.btn {
+  display: inline-flex; align-items: center; justify-content: center;
+  gap: var(--sp-2);
+  padding: 8px 16px;
+  border-radius: var(--radius-sm);
+  font-size: 13px; font-weight: 500;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: all var(--duration-fast) var(--ease-out);
+  border: 1px solid transparent;
+  white-space: nowrap;
+  height: 34px;
+}
+.btn svg { width: 14px; height: 14px; }
+
+.btn-primary {
+  background: var(--accent-primary);
+  color: #fff;
+  border-color: var(--accent-primary);
+  box-shadow: var(--shadow-sm);
+}
+.btn-primary:hover {
+  background: #2563EB;
+  box-shadow: var(--glow-primary);
+  transform: translateY(-1px);
+}
+.btn-primary:active { transform: translateY(0); }
+
+.btn-secondary {
+  background: var(--bg-elevated);
+  color: var(--text-primary);
+  border-color: var(--border-default);
+}
+.btn-secondary:hover {
+  background: var(--bg-hover);
+  border-color: var(--border-strong);
+}
+
+.btn-ghost {
+  background: transparent;
+  color: var(--text-secondary);
+  border-color: transparent;
+}
+.btn-ghost:hover { background: var(--bg-hover); color: var(--text-primary); }
+
+.btn-success {
+  background: var(--accent-green);
+  color: #fff;
+  border-color: var(--accent-green);
+}
+.btn-success:hover { background: #16A34A; }
+
+.btn-danger {
+  background: rgba(239,68,68,0.15);
+  color: var(--accent-red);
+  border-color: rgba(239,68,68,0.3);
+}
+.btn-danger:hover { background: rgba(239,68,68,0.25); }
+
+.btn-sm { height: 28px; padding: 4px 10px; font-size: 12px; }
+.btn-lg { height: 40px; padding: 10px 20px; font-size: 14px; border-radius: var(--radius-md); }
+
+/* ═══════════════════════════════════════════════════════════
+   CARDS & PANELS
+   ═══════════════════════════════════════════════════════════ */
+.card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  transition: border-color var(--duration-normal) var(--ease-out),
+              box-shadow var(--duration-normal) var(--ease-out);
+}
+.card:hover {
+  border-color: var(--border-default);
+}
+
+.card-header {
+  display: flex; align-items: center; justify-content: space-between;
+  margin-bottom: var(--sp-4);
+}
+.card-header h3 {
+  font-size: 13px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.8px;
+  color: var(--text-muted);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATUS CARDS (Harness Status)
+   ═══════════════════════════════════════════════════════════ */
+.status-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+  gap: var(--sp-3);
+}
+
+.status-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  display: flex; align-items: center; gap: var(--sp-3);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+.status-card:hover {
+  border-color: var(--border-default);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.status-card-icon {
+  width: 36px; height: 36px;
+  border-radius: var(--radius-sm);
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.status-card-icon svg { width: 18px; height: 18px; }
+
+.status-card-icon.blue  { background: rgba(59,130,246,0.12); color: var(--accent-primary); }
+.status-card-icon.green { background: rgba(34,197,94,0.12); color: var(--accent-green); }
+.status-card-icon.red   { background: rgba(239,68,68,0.12); color: var(--accent-red); }
+.status-card-icon.yellow{ background: rgba(234,179,8,0.12); color: var(--accent-yellow); }
+.status-card-icon.purple{ background: rgba(168,85,247,0.12); color: var(--accent-purple); }
+
+.status-card-body { flex: 1; min-width: 0; }
+.status-card-name { font-size: 13px; font-weight: 600; line-height: 1.3; }
+.status-card-detail { font-size: 11px; color: var(--text-muted); margin-top: 1px; }
+
+.status-card-dot {
+  width: 8px; height: 8px; border-radius: 50%;
+  flex-shrink: 0;
+}
+.status-card-dot.ok    { background: var(--accent-green); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+.status-card-dot.fail  { background: var(--accent-red); box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+.status-card-dot.warn  { background: var(--accent-yellow); box-shadow: 0 0 8px rgba(234,179,8,0.5); }
+
+/* ═══════════════════════════════════════════════════════════
+   MODEL CARDS (LLM Configuration)
+   ═══════════════════════════════════════════════════════════ */
+.models-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(280px, 1fr));
+  gap: var(--sp-3);
+}
+
+.model-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-lg);
+  padding: var(--sp-5);
+  transition: all var(--duration-normal) var(--ease-out);
+  position: relative;
+  overflow: hidden;
+}
+.model-card::before {
+  content: '';
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--accent-primary), var(--accent-purple));
+  opacity: 0;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.model-card:hover {
+  border-color: var(--border-strong);
+  box-shadow: var(--shadow-md), var(--glow-primary);
+  transform: translateY(-2px);
+}
+.model-card:hover::before { opacity: 1; }
+
+.model-card-header {
+  display: flex; align-items: flex-start; justify-content: space-between;
+  margin-bottom: var(--sp-3);
+}
+
+.model-alias {
+  font-size: 15px; font-weight: 700;
+  letter-spacing: -0.3px;
+  text-transform: capitalize;
+}
+
+.model-provider-badge {
+  display: inline-flex; align-items: center; gap: 4px;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 10px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.5px;
+  flex-shrink: 0;
+}
+.model-provider-badge.local  { background: rgba(34,197,94,0.12); color: var(--accent-green); border: 1px solid rgba(34,197,94,0.25); }
+.model-provider-badge.cloud  { background: rgba(249,115,22,0.12); color: var(--accent-orange); border: 1px solid rgba(249,115,22,0.25); }
+.model-provider-badge.free   { background: rgba(59,130,246,0.12); color: var(--accent-primary); border: 1px solid rgba(59,130,246,0.25); }
+
+.model-current {
+  font-family: var(--font-mono);
+  font-size: 12px;
+  color: var(--text-secondary);
+  background: var(--bg-base);
+  padding: var(--sp-2) var(--sp-3);
+  border-radius: var(--radius-sm);
+  border: 1px solid var(--border-subtle);
+  margin-bottom: var(--sp-4);
+  word-break: break-all;
+  line-height: 1.5;
+}
+
+.model-api-base {
+  font-size: 11px;
+  color: var(--text-muted);
+  font-family: var(--font-mono);
+  margin-bottom: var(--sp-3);
+  display: flex; align-items: center; gap: var(--sp-1);
+}
+
+.model-actions {
+  display: flex; flex-direction: column; gap: var(--sp-2);
+}
+
+.model-select-row {
+  display: flex; gap: var(--sp-2); align-items: center;
+}
+.model-select-row select {
+  flex: 1;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-sans);
+  cursor: pointer;
+  transition: border-color var(--duration-fast) var(--ease-out);
+  appearance: none;
+  -webkit-appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12' viewBox='0 0 24 24' fill='none' stroke='%2394A3B8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpolyline points='6 9 12 15 18 9'%3E%3C/polyline%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 8px center;
+  padding-right: 28px;
+}
+.model-select-row select:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+
+.model-custom-row {
+  display: flex; gap: var(--sp-2); align-items: center;
+}
+.model-custom-row input {
+  flex: 1;
+  background: var(--bg-base);
+  color: var(--text-primary);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm);
+  padding: 6px 10px;
+  font-size: 12px;
+  font-family: var(--font-mono);
+  transition: border-color var(--duration-fast) var(--ease-out);
+}
+.model-custom-row input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  box-shadow: 0 0 0 2px rgba(59,130,246,0.2);
+}
+.model-custom-row input::placeholder { color: var(--text-muted); }
+
+/* ═══════════════════════════════════════════════════════════
+   AGENTS TABLE
+   ═══════════════════════════════════════════════════════════ */
+.agents-table-wrapper {
+  overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--border-subtle);
+}
+
+.agents-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 13px;
+}
+
+.agents-table thead th {
+  background: var(--bg-surface);
+  padding: var(--sp-3) var(--sp-4);
+  text-align: left;
+  font-size: 11px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.8px;
+  color: var(--text-muted);
+  border-bottom: 1px solid var(--border-subtle);
+  white-space: nowrap;
+}
+
+.agents-table tbody tr {
+  transition: background var(--duration-fast) var(--ease-out);
+}
+.agents-table tbody tr:hover {
+  background: var(--bg-hover);
+}
+.agents-table tbody tr:last-child td { border-bottom: none; }
+
+.agents-table tbody td {
+  padding: var(--sp-3) var(--sp-4);
+  border-bottom: 1px solid var(--border-subtle);
+  vertical-align: middle;
+}
+
+.agent-name {
+  font-weight: 600;
+  font-size: 13px;
+  display: flex; align-items: center; gap: var(--sp-2);
+}
+.agent-path {
+  font-family: var(--font-mono);
+  font-size: 11px;
+  color: var(--text-muted);
+  margin-top: 2px;
+}
+.agent-desc { color: var(--text-secondary); font-size: 12px; }
+
+.mode-badge {
+  display: inline-flex;
+  padding: 2px 8px;
+  border-radius: 12px;
+  font-size: 11px; font-weight: 600;
+  background: rgba(99,102,241,0.12);
+  color: var(--accent-secondary);
+  border: 1px solid rgba(99,102,241,0.2);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EXTENSIONS GRID
+  ═══════════════════════════════════════════════════════════ */
+.extensions-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: var(--sp-3);
+}
+
+.extension-card {
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-md);
+  padding: var(--sp-4);
+  transition: all var(--duration-normal) var(--ease-out);
+}
+.extension-card:hover {
+  border-color: var(--border-default);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+
+.ext-header {
+  display: flex; align-items: center; gap: var(--sp-2);
+  margin-bottom: var(--sp-3);
+}
+.ext-icon {
+  width: 32px; height: 32px;
+  border-radius: var(--radius-sm);
+  background: linear-gradient(135deg, var(--accent-secondary), var(--accent-purple));
+  display: flex; align-items: center; justify-content: center;
+  flex-shrink: 0;
+}
+.ext-icon svg { width: 16px; height: 16px; color: #fff; }
+.ext-name { font-size: 14px; font-weight: 600; }
+.ext-path { font-size: 11px; color: var(--text-muted); font-family: var(--font-mono); }
+
+.ext-stats {
+  display: flex; gap: var(--sp-3);
+  flex-wrap: wrap;
+}
+.ext-stat {
+  font-size: 11px; color: var(--text-secondary);
+  display: flex; align-items: center; gap: 3px;
+}
+.ext-stat strong { color: var(--text-primary); font-weight: 600; }
+
+.ext-flags {
+  display: flex; gap: var(--sp-2);
+  margin-top: var(--sp-3);
+  padding-top: var(--sp-3);
+  border-top: 1px solid var(--border-subtle);
+}
+.ext-flag {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 6px;
+  border-radius: 4px;
+  background: rgba(59,130,246,0.1);
+  color: var(--accent-primary);
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOOLS LIST
+   ═══════════════════════════════════════════════════════════ */
+.tools-list {
+  display: flex; flex-direction: column; gap: var(--sp-1);
+}
+.tool-item {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: var(--sp-3) var(--sp-4);
+  background: var(--bg-card);
+  border: 1px solid var(--border-subtle);
+  border-radius: var(--radius-sm);
+  transition: all var(--duration-fast) var(--ease-out);
+}
+.tool-item:hover {
+  background: var(--bg-elevated);
+  border-color: var(--border-default);
+}
+.tool-info { display: flex; align-items: center; gap: var(--sp-3); }
+.tool-name { font-weight: 500; font-size: 13px; }
+.tool-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); }
+.tool-status {
+  font-size: 10px; font-weight: 600;
+  padding: 2px 8px;
+  border-radius: 12px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.tool-status.exec { background: rgba(34,197,94,0.12); color: var(--accent-green); }
+.tool-status.static { background: rgba(148,163,184,0.12); color: var(--text-secondary); }
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST NOTIFICATION
+   ═══════════════════════════════════════════════════════════ */
+.toast-container {
+  position: fixed;
+  bottom: var(--sp-6);
+  right: var(--sp-6);
+  z-index: 9999;
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-2);
+}
+
+.toast {
+  background: var(--bg-elevated);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-md);
+  padding: var(--sp-3) var(--sp-4);
+  font-size: 13px;
+  display: flex; align-items: center; gap: var(--sp-2);
+  box-shadow: var(--shadow-lg);
+  animation: toastIn var(--duration-slow) var(--ease-spring);
+  max-width: 360px;
+}
+.toast.success { border-left: 3px solid var(--accent-green); }
+.toast.error { border-left: 3px solid var(--accent-red); }
+.toast.info { border-left: 3px solid var(--accent-primary); }
+
+@keyframes toastIn {
+  from { opacity: 0; transform: translateY(20px) scale(0.95); }
+  to { opacity: 1; transform: translateY(0) scale(1); }
+}
+@keyframes toastOut {
+  from { opacity: 1; transform: translateY(0) scale(1); }
+  to { opacity: 0; transform: translateY(-10px) scale(0.95); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL / DIALOG
+   ═══════════════════════════════════════════════════════════ */
+.modal-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0,0,0,0.6);
+  backdrop-filter: blur(4px);
+  z-index: 1000;
+  display: flex; align-items: center; justify-content: center;
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity var(--duration-normal) var(--ease-out);
+}
+.modal-overlay.open {
+  opacity: 1;
+  pointer-events: all;
+}
+.modal {
+  background: var(--bg-surface);
+  border: 1px solid var(--border-default);
+  border-radius: var(--radius-xl);
+  padding: var(--sp-6);
+  max-width: 520px;
+  width: 90%;
+  box-shadow: var(--shadow-lg);
+  transform: translateY(12px) scale(0.97);
+  transition: transform var(--duration-normal) var(--ease-spring);
+}
+.modal-overlay.open .modal {
+  transform: translateY(0) scale(1);
+}
+.modal h3 {
+  font-size: 16px; font-weight: 700;
+  margin-bottom: var(--sp-4);
+}
+.modal-body { margin-bottom: var(--sp-4); }
+.modal-footer {
+  display: flex; justify-content: flex-end; gap: var(--sp-2);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   LOADING SKELETON
+   ═══════════════════════════════════════════════════════════ */
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+.skeleton {
+  background: linear-gradient(90deg, var(--bg-card) 25%, var(--bg-hover) 50%, var(--bg-card) 75%);
+  background-size: 200% 100%;
+  animation: shimmer 1.5s infinite;
+  border-radius: var(--radius-sm);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SECTION DIVIDER
+   ═══════════════════════════════════════════════════════════ */
+.section-divider {
+  border: none;
+  border-top: 1px solid var(--border-subtle);
+  margin: var(--sp-2) 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   EMPTY STATE
+   ═══════════════════════════════════════════════════════════ */
+.empty-state {
+  text-align: center;
+  padding: var(--sp-12) var(--sp-6);
+  color: var(--text-muted);
+}
+.empty-state svg { width: 40px; height: 40px; margin-bottom: var(--sp-3); opacity: 0.4; }
+.empty-state p { font-size: 13px; }
+
+/* ═══════════════════════════════════════════════════════════
+   RESPONSIVE — Mobile & Tablet
+   ═══════════════════════════════════════════════════════════ */
+@media (max-width: 900px) {
+  .app-layout {
+    grid-template-columns: 1fr;
   }
-  * { box-sizing: border-box; }
-  body {
-    margin: 0;
-    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Helvetica, Arial, sans-serif;
-    background: var(--bg);
-    color: var(--text);
-    line-height: 1.5;
+  .sidebar {
+    position: relative;
+    height: auto;
+    border-right: none;
+    border-bottom: 1px solid var(--border-subtle);
+    padding: var(--sp-4);
   }
-  header {
-    padding: 20px 24px;
-    border-bottom: 1px solid var(--border);
-    background: var(--panel);
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 16px;
+  .main-content {
+    padding: var(--sp-4);
+    max-height: none;
   }
-  header h1 { margin: 0; font-size: 18px; font-weight: 600; letter-spacing: 0.3px; }
-  header p { margin: 4px 0 0; color: var(--muted); font-size: 13px; }
-  .header-actions { display: flex; gap: 8px; }
-  main { padding: 20px 24px; display: grid; gap: 20px; }
-  section {
-    background: var(--panel);
-    border: 1px solid var(--border);
-    border-radius: 10px;
-    padding: 16px;
+  .models-grid {
+    grid-template-columns: 1fr;
   }
-  section h2 {
-    margin: 0 0 12px;
-    font-size: 13px;
-    text-transform: uppercase;
-    letter-spacing: 1px;
-    color: var(--muted);
-    font-weight: 600;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
+  .status-grid {
+    grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
   }
-  .grid { display: grid; gap: 10px; }
-  .grid-3 { grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); }
-  .grid-2 { grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); }
-  .grid-4 { grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); }
-  .card {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    display: flex;
-    align-items: center;
-    justify-content: space-between;
-    gap: 10px;
+  .extensions-grid {
+    grid-template-columns: 1fr;
   }
-  .card .label { font-size: 12px; color: var(--muted); text-transform: uppercase; letter-spacing: 0.5px; }
-  .card .value { font-size: 14px; font-weight: 600; margin-top: 2px; }
-  .dot {
-    width: 8px; height: 8px; border-radius: 50%;
-    display: inline-block; margin-right: 6px;
+  .top-bar { flex-direction: column; align-items: flex-start; }
+}
+
+@media (max-width: 480px) {
+  html { font-size: 13px; }
+  .main-content { padding: var(--sp-3); }
+  .status-grid { grid-template-columns: 1fr; }
+  .model-select-row, .model-custom-row { flex-direction: column; }
+  .model-select-row select, .model-custom-row input { width: 100%; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   REDUCED MOTION
+   ═══════════════════════════════════════════════════════════ */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
   }
-  .dot.ok { background: var(--green); box-shadow: 0 0 6px var(--green); }
-  .dot.fail { background: var(--red); box-shadow: 0 0 6px var(--red); }
-  table { width: 100%; border-collapse: collapse; font-size: 13px; }
-  th, td {
-    text-align: left;
-    padding: 8px 10px;
-    border-bottom: 1px solid var(--border);
-    vertical-align: top;
-  }
-  th { color: var(--muted); font-weight: 600; font-size: 12px; text-transform: uppercase; letter-spacing: 0.5px; }
-  tr:last-child td { border-bottom: none; }
-  .muted { color: var(--muted); }
-  select, input, button {
-    background: var(--panel-2);
-    color: var(--text);
-    border: 1px solid var(--border);
-    border-radius: 6px;
-    padding: 6px 10px;
-    font-size: 13px;
-    cursor: pointer;
-  }
-  input { font-family: monospace; }
-  button { background: var(--blue); border-color: var(--blue); color: #fff; font-weight: 500; }
-  button:hover { filter: brightness(1.1); }
-  button.secondary { background: var(--panel-2); border-color: var(--border); color: var(--text); }
-  button.danger { background: var(--red); border-color: var(--red); }
-  button.success { background: var(--green); border-color: var(--green); }
-  .tag {
-    display: inline-block;
-    padding: 2px 8px;
-    border-radius: 12px;
-    font-size: 11px;
-    font-weight: 600;
-    background: rgba(88,166,255,0.15);
-    color: var(--blue);
-    border: 1px solid rgba(88,166,255,0.3);
-  }
-  .tag.green { background: rgba(63,185,80,0.15); color: var(--green); border-color: rgba(63,185,80,0.3); }
-  .tag.orange { background: rgba(240,136,62,0.15); color: var(--orange); border-color: rgba(240,136,62,0.3); }
-  .toast {
-    position: fixed;
-    bottom: 20px;
-    right: 20px;
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    color: var(--text);
-    padding: 10px 14px;
-    border-radius: 8px;
-    font-size: 13px;
-    opacity: 0;
-    transition: opacity 0.2s;
-    pointer-events: none;
-    z-index: 1000;
-  }
-  .toast.show { opacity: 1; }
-  .row { display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
-  .presets { display: flex; gap: 8px; flex-wrap: wrap; margin-top: 8px; }
-  .model-card {
-    background: var(--panel-2);
-    border: 1px solid var(--border);
-    border-radius: 8px;
-    padding: 12px;
-    flex: 1;
-    min-width: 240px;
-  }
-  .model-card .header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    margin-bottom: 8px;
-  }
-  .model-card .name { font-weight: 600; font-size: 14px; }
-  .model-card .alias { font-size: 12px; color: var(--muted); }
-  .model-card .meta { font-size: 12px; color: var(--muted); margin-top: 4px; }
-  .section-divider {
-    border: none;
-    border-top: 1px solid var(--border);
-    margin: 16px 0;
-  }
-  .empty { color: var(--muted); font-size: 13px; padding: 8px 0; }
+  body::before, body::after { display: none; }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════════════════════ */
+.mt-1 { margin-top: var(--sp-2); }
+.mt-2 { margin-top: var(--sp-4); }
+.mt-3 { margin-top: var(--sp-6); }
+.mb-1 { margin-bottom: var(--sp-2); }
+.mb-2 { margin-bottom: var(--sp-4); }
+.flex { display: flex; }
+.flex-wrap { flex-wrap: wrap; }
+.gap-1 { gap: var(--sp-1); }
+.gap-2 { gap: var(--sp-2); }
+.gap-3 { gap: var(--sp-3); }
+.gap-4 { gap: var(--sp-4); }
+.items-center { align-items: center; }
+.justify-between { justify-content: space-between; }
+.text-muted { color: var(--text-muted); }
+.text-sm { font-size: 12px; }
+.text-xs { font-size: 11px; }
+.mono { font-family: var(--font-mono); }
 </style>
 </head>
 <body>
-<header>
-  <div>
-    <h1>pipa_harness dashboard</h1>
-    <p id="clock"></p>
+
+<div class="app-layout">
+  <!-- ═══════════════════════════════════════════════════
+       LEFT SIDEBAR — Navigation & Global Status
+       ═══════════════════════════════════════════════════ -->
+  <aside class="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">π</div>
+      <div class="sidebar-brand-text">
+        <h1>pipa_harness</h1>
+        <p id="clock">Loading…</p>
+      </div>
+    </div>
+
+    <nav class="nav-section">
+      <div class="nav-label">Overview</div>
+      <button class="nav-item active" data-section="status" onclick="scrollToSection('status-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Status
+      </button>
+      <button class="nav-item" data-section="models" onclick="scrollToSection('models-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>
+        LLM Models
+      </button>
+      <button class="nav-item" data-section="keys" onclick="scrollToSection('keys-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 1 1-7.778 7.778 5.5 5.5 0 0 1 7.777-7.777zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+        API Keys
+      </button>
+      <button class="nav-item" data-section="free-models" onclick="scrollToSection('free-models-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v4M12 18v4M4.93 4.93l2.83 2.83M16.24 16.24l2.83 2.83M2 12h4M18 12h4M4.93 19.07l2.83-2.83M16.24 7.76l2.83-2.83"/></svg>
+        Free Models
+      </button>
+      <button class="nav-item" data-section="agents" onclick="scrollToSection('agents-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Agents
+      </button>
+    </nav>
+
+    <nav class="nav-section">
+      <div class="nav-label">Project</div>
+      <button class="nav-item" data-section="extensions" onclick="scrollToSection('extensions-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>
+        Extensions
+      </button>
+      <button class="nav-item" data-section="tools" onclick="scrollToSection('tools-section')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Tools
+      </button>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-pill">
+        <span class="status-dot online" id="global-status-dot"></span>
+        <span id="global-status-text">Checking…</span>
+      </div>
+    </div>
+  </aside>
+
+  <!-- ═══════════════════════════════════════════════════
+       MAIN CONTENT AREA
+       ═══════════════════════════════════════════════════ -->
+  <main class="main-content">
+    <!-- Top Bar -->
+    <div class="top-bar">
+      <div>
+        <h2>Operations Dashboard</h2>
+        <p class="subtitle">Manage LLM routing, agent assignments, and harness health</p>
+      </div>
+      <div class="top-bar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="refreshAll()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="restartGateway()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Restart Gateway
+        </button>
+      </div>
+    </div>
+
+    <!-- ═══════════════════════════════════════════════════
+         HARNESS STATUS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="status-section">
+      <div class="card-header">
+        <h3>Harness Status</h3>
+        <span class="text-xs text-muted mono" id="last-check">Last check: —</span>
+      </div>
+      <div class="status-grid" id="status-grid">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         API KEYS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="keys-section">
+      <div class="card-header">
+        <h3>API Keys</h3>
+        <span class="text-xs text-muted">stored in <code class="mono">pipa_harness/.env</code> — restart the gateway after saving</span>
+      </div>
+      <div class="models-grid" id="keys-grid" style="grid-template-columns: repeat(auto-fill, minmax(320px, 1fr));">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         LLM MODELS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="models-section">
+      <div class="card-header">
+        <h3>LLM Routing — LiteLLM Aliases</h3>
+        <div class="flex gap-2">
+          <button class="btn btn-ghost btn-sm" onclick="resetAllModels()">Reset All</button>
+        </div>
+      </div>
+      <div class="models-grid" id="models-grid">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         FREE MODELS FROM KILO GATEWAY
+         ═══════════════════════════════════════════════════ -->
+    <section id="free-models-section">
+      <div class="card-header">
+        <h3>Free Models — Kilo Gateway</h3>
+        <div class="flex gap-2 items-center">
+          <span class="text-xs text-muted mono" id="free-models-count">0 available</span>
+          <button class="btn btn-ghost btn-sm" onclick="refreshFreeModels()">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+            Refresh
+          </button>
+        </div>
+      </div>
+      <div class="models-grid" id="free-models-grid" style="grid-template-columns: repeat(auto-fill, minmax(240px, 1fr));">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         AGENTS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="agents-section">
+      <div class="card-header">
+        <h3>Agent Configuration</h3>
+        <span class="text-xs text-muted" id="agent-count">0 agents</span>
+      </div>
+      <div class="agents-table-wrapper">
+        <table class="agents-table">
+          <thead>
+            <tr>
+              <th>Agent</th>
+              <th>Description</th>
+              <th>Mode</th>
+              <th>Model Assignment</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody id="agents-tbody">
+            <!-- Populated by JS -->
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         EXTENSIONS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="extensions-section">
+      <div class="card-header">
+        <h3>Extensions</h3>
+        <span class="text-xs text-muted" id="ext-count">0 found</span>
+      </div>
+      <div class="extensions-grid" id="extensions-grid">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+
+    <!-- ═══════════════════════════════════════════════════
+         TOOLS SECTION
+         ═══════════════════════════════════════════════════ -->
+    <section id="tools-section">
+      <div class="card-header">
+        <h3>Tools & Scripts</h3>
+      </div>
+      <div class="tools-list" id="tools-list">
+        <!-- Populated by JS -->
+      </div>
+    </section>
+  </main>
+</div>
+
+<!-- Toast Container -->
+<div class="toast-container" id="toast-container"></div>
+
+<!-- Confirm Modal -->
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h3 id="modal-title">Confirm Action</h3>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-danger" id="modal-confirm-btn">Confirm</button>
+    </div>
   </div>
-  <div class="header-actions">
-    <button class="secondary" onclick="refreshAll()">Refresh</button>
-  </div>
-</header>
-<main>
-  <section>
-    <h2>Harness status</h2>
-    <div class="grid grid-3" id="status"></div>
-  </section>
-
-  <section>
-    <h2>LLMs <span class="tag green">config/litellm.yaml</span> <button class="secondary" onclick="restartGateway()" style="font-size:11px;padding:4px 8px">Restart gateway</button></h2>
-    <div id="models"></div>
-  </section>
-
-  <section>
-    <h2>Extensions</h2>
-    <div class="grid grid-2" id="extensions"></div>
-  </section>
-
-  <section>
-    <h2>Agents</h2>
-    <table>
-      <thead>
-        <tr>
-          <th>Name</th>
-          <th>Path</th>
-          <th>Description</th>
-          <th>Mode</th>
-          <th>Model</th>
-          <th></th>
-        </tr>
-      </thead>
-      <tbody id="agents"></tbody>
-    </table>
-  </section>
-
-  <section>
-    <h2>Tools</h2>
-    <div class="grid grid-2" id="tools"></div>
-  </section>
-</main>
-<div class="toast" id="toast"></div>
+</div>
 
 <script>
-const API = "/api";
+/* ═══════════════════════════════════════════════════════════
+   API HELPERS
+   ═══════════════════════════════════════════════════════════ */
+const API = '/api';
 
-function $(id) { return document.getElementById(id); }
-function toast(msg, isError) {
-  const t = $("toast");
-  t.textContent = msg;
-  t.style.borderColor = isError ? "var(--red)" : "var(--green)";
-  t.classList.add("show");
-  setTimeout(() => t.classList.remove("show"), 2200);
-}
-async function get(path) {
+async function apiGet(path) {
   const r = await fetch(`${API}${path}`);
-  if (!r.ok) throw new Error(r.statusText);
+  if (!r.ok) throw new Error(`HTTP ${r.status}`);
   return r.json();
 }
-async function post(path, body) {
+
+async function apiPost(path, body = {}) {
   const r = await fetch(`${API}${path}`, {
-    method: "POST",
-    headers: {"Content-Type": "application/json"},
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body)
   });
   return r.json();
 }
 
+async function apiPut(path, body = {}) {
+  const r = await fetch(`${API}${path}`, {
+    method: 'PUT',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(body)
+  });
+  return r.json();
+}
+
+/* ═══════════════════════════════════════════════════════════
+   TOAST SYSTEM
+   ═══════════════════════════════════════════════════════════ */
+function toast(message, type = 'info') {
+  const container = document.getElementById('toast-container');
+  const el = document.createElement('div');
+  el.className = `toast ${type}`;
+
+  const icons = {
+    success: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#22C55E" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>',
+    error: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#EF4444" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="15" y1="9" x2="9" y2="15"/><line x1="9" y1="9" x2="15" y2="15"/></svg>',
+    info: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="#3B82F6" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>'
+  };
+
+  el.innerHTML = `${icons[type] || icons.info}<span>${message}</span>`;
+  container.appendChild(el);
+
+  setTimeout(() => {
+    el.style.animation = 'toastOut 250ms ease-out forwards';
+    setTimeout(() => el.remove(), 250);
+  }, 2500);
+}
+
+/* ═══════════════════════════════════════════════════════════
+   MODAL SYSTEM
+   ═══════════════════════════════════════════════════════════ */
+function showModal(title, body, onConfirm) {
+  document.getElementById('modal-title').textContent = title;
+  document.getElementById('modal-body').innerHTML = body;
+  document.getElementById('modal-confirm-btn').onclick = () => { onConfirm(); closeModal(); };
+  document.getElementById('confirm-modal').classList.add('open');
+}
+
+function closeModal() {
+  document.getElementById('confirm-modal').classList.remove('open');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   CLOCK
+   ═══════════════════════════════════════════════════════════ */
+function updateClock() {
+  const now = new Date();
+  document.getElementById('clock').textContent = now.toLocaleString('en-US', {
+    weekday: 'short', month: 'short', day: 'numeric',
+    hour: '2-digit', minute: '2-digit', second: '2-digit'
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   SCROLL TO SECTION (nav highlighting)
+   ═══════════════════════════════════════════════════════════ */
+function scrollToSection(id) {
+  const el = document.getElementById(id);
+  if (!el) return;
+  el.scrollIntoView({ behavior: 'smooth', block: 'start' });
+
+  // Update nav
+  document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+  const navItem = document.querySelector(`.nav-item[data-section="${id.replace('-section', '')}"]`);
+  if (navItem) navItem.classList.add('active');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   STATUS ICONS (inline SVG paths)
+   ═══════════════════════════════════════════════════════════ */
+const STATUS_ICONS = {
+  litellm: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>',
+  ollama: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>',
+  opencode: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>',
+  graphify: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>',
+  emdash: '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="2" width="14" height="20" rx="2" ry="2"/><line x1="12" y1="18" x2="12.01" y2="18"/></svg>',
+};
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: HARNESS STATUS
+   ═══════════════════════════════════════════════════════════ */
 async function renderStatus() {
-  const data = await get("/status");
-  const el = $("status");
-  el.innerHTML = "";
-  for (const [name, info] of Object.entries(data)) {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <div>
-        <div class="label">${name}</div>
-        <div class="value muted">${info.detail || ""}</div>
-      </div>
-      <div><span class="dot ${info.up ? "ok" : "fail"}"></span>${info.up ? "up" : "down"}</div>
-    `;
-    el.appendChild(card);
-  }
-}
+  try {
+    const data = await apiGet('/status');
+    const grid = document.getElementById('status-grid');
+    grid.innerHTML = '';
 
-async function renderModels() {
-  const data = await get("/models");
-  const el = $("models");
-  el.innerHTML = "";
-  const aliases = data.aliases || {};
-  const presets = data.presets || [];
+    let allOk = true;
+    for (const [name, info] of Object.entries(data)) {
+      if (!info.up) allOk = false;
 
-  const cards = document.createElement("div");
-  cards.className = "grid grid-4";
+      const iconSvg = STATUS_ICONS[name] || '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/></svg>';
+      const iconClass = info.up ? 'green' : 'red';
 
-  for (const [alias, info] of Object.entries(aliases)) {
-    const card = document.createElement("div");
-    card.className = "model-card";
-    const provider = (info.api_base || "").includes("anthropic") ? "Anthropic" :
-                     (info.api_base || "").includes("moonshot") ? "Kimi" :
-                     (info.api_base || "").includes("google") ? "Google" :
-                     (info.api_base || "").includes("openai") ? "OpenAI" :
-                     info.api_base ? "Cloud" : "Ollama (local)";
-    card.innerHTML = `
-      <div class="header">
-        <div>
-          <div class="name">${alias}</div>
-          <div class="alias">${info.model || "—"}</div>
+      const card = document.createElement('div');
+      card.className = 'status-card';
+      card.innerHTML = `
+        <div class="status-card-icon ${iconClass}">${iconSvg}</div>
+        <div class="status-card-body">
+          <div class="status-card-name">${name}</div>
+          <div class="status-card-detail">${escapeHtml(info.detail || '')}</div>
         </div>
-        <span class="tag ${provider === "Ollama (local)" ? "green" : "orange"}">${provider}</span>
-      </div>
-      <div class="meta">${info.api_base || "local ollama"}</div>
-      <div class="meta" style="margin-top:4px;font-family:monospace;font-size:11px;color:var(--muted)">${info.api_key || ""}</div>
-      <hr class="section-divider">
-      <div class="row">
-        <select id="preset-${alias}">
-          <option value="">— preset —</option>
-          ${presets.map(p => `<option value="${p.id}">${p.provider}: ${p.id}</option>`).join("")}
-        </select>
-        <button onclick="applyPreset('${alias}')">Apply</button>
-      </div>
-      <div class="row" style="margin-top:8px">
-        <input id="custom-${alias}" placeholder="custom model (e.g. openai/gpt-4o)" style="flex:1">
-        <input id="base-${alias}" placeholder="api_base" value="${info.api_base || ""}" style="flex:1">
-        <input id="key-${alias}" placeholder="api_key" value="${info.api_key || ""}" style="flex:1">
-      </div>
-      <div class="row" style="margin-top:8px">
-        <button onclick="applyCustom('${alias}')">Save custom</button>
-        <button class="secondary" onclick="resetModel('${alias}')">Reset default</button>
-      </div>
-    `;
-    cards.appendChild(card);
-  }
-  el.appendChild(cards);
+        <div class="status-card-dot ${info.up ? 'ok' : 'fail'}"></div>
+      `;
+      grid.appendChild(card);
+    }
 
-  if (!Object.keys(aliases).length) {
-    el.innerHTML = `<div class="empty">No models configured in ${API}/models</div>`;
-  } else {
-    const hint = document.createElement("div");
-    hint.className = "empty";
-    hint.style.marginTop = "8px";
-    hint.textContent = "Tip: after changing a model, restart the LiteLLM gateway for changes to take effect.";
-    el.appendChild(hint);
+    // Update global status
+    const dot = document.getElementById('global-status-dot');
+    const txt = document.getElementById('global-status-text');
+    if (allOk) {
+      dot.className = 'status-dot online';
+      txt.textContent = 'All systems operational';
+    } else {
+      dot.className = 'status-dot offline';
+      txt.textContent = 'Some services down';
+    }
+
+    document.getElementById('last-check').textContent =
+      `Last check: ${new Date().toLocaleTimeString()}`;
+  } catch (e) {
+    console.error('Status fetch failed:', e);
   }
 }
 
+/* ═══════════════════════════════════════════════════════════
+   RENDER: LLM MODELS
+   ═══════════════════════════════════════════════════════════ */
+async function renderModels() {
+  try {
+    const data = await apiGet('/models');
+    const grid = document.getElementById('models-grid');
+    grid.innerHTML = '';
+
+    const aliases = data.aliases || {};
+    const presets = data.presets || [];
+
+    // Group presets by provider for a clean picker: Kilo free / Ollama / Kimi / other
+    const groupLabels = { kilo: 'Kilo Code — free', ollama: 'Ollama — local', kimi: 'Kimi — cloud', other: 'Other presets' };
+    const grouped = {};
+    for (const p of presets) {
+      const g = p.group || 'other';
+      (grouped[g] = grouped[g] || []).push(p);
+    }
+    const presetOptions = Object.entries(groupLabels)
+      .filter(([g]) => grouped[g] && grouped[g].length)
+      .map(([g, label]) =>
+        `<optgroup label="${escapeAttr(label)}">${grouped[g].map(p =>
+          `<option value="${escapeAttr(p.id)}">${escapeHtml(p.id)}</option>`).join('')}</optgroup>`)
+      .join('');
+
+    if (!Object.keys(aliases).length) {
+      grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>No models configured</p></div>';
+      return;
+    }
+
+    for (const [alias, info] of Object.entries(aliases)) {
+      const provider = detectProvider(info.api_base || '', info.api_key || '');
+      const card = document.createElement('div');
+      card.className = 'model-card';
+      card.innerHTML = `
+        <div class="model-card-header">
+          <div>
+            <div class="model-alias">${alias}</div>
+            <span class="model-provider-badge ${provider.badgeClass}">${provider.name}</span>
+          </div>
+        </div>
+        <div class="model-current">${escapeHtml(info.model || '—')}</div>
+        <div class="model-api-base">
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M10 13a5 5 0 0 0 7.54.54l3-3a5 5 0 0 0-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 0 0-7.54-.54l-3 3a5 5 0 0 0 7.07 7.07l1.71-1.71"/></svg>
+          ${escapeHtml(info.api_base || 'local')}
+        </div>
+        <div class="model-actions">
+          <div class="model-select-row">
+            <select id="preset-${alias}" aria-label="Select preset for ${alias}">
+              <option value="">— Pick a model (Kilo free · Ollama · Kimi) —</option>
+              ${presetOptions}
+            </select>
+            <button class="btn btn-secondary btn-sm" onclick="applyPreset('${escapeAttr(alias)}')">Apply</button>
+          </div>
+          <div class="model-custom-row">
+            <input id="custom-${alias}" placeholder="model (e.g. openai/gpt-4o)" aria-label="Custom model for ${alias}">
+            <button class="btn btn-primary btn-sm" onclick="applyCustom('${escapeAttr(alias)}')">Save</button>
+          </div>
+          <div class="flex gap-2 mt-1">
+            <button class="btn btn-ghost btn-sm" onclick="resetModel('${escapeAttr(alias)}')">Reset default</button>
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+  } catch (e) {
+    console.error('Models fetch failed:', e);
+  }
+}
+
+function detectProvider(apiBase, apiKey) {
+  if (!apiBase) return { name: 'Ollama Local', badgeClass: 'local' };
+  const b = apiBase.toLowerCase();
+  const k = (apiKey || '').toLowerCase();
+  if (b.includes('kilo') || b.includes('step')) return { name: 'Kilo Free', badgeClass: 'free' };
+  if (b.includes('anthropic')) return { name: 'Anthropic', badgeClass: 'cloud' };
+  if (b.includes('moonshot') || b.includes('kimi')) return { name: 'Kimi', badgeClass: 'cloud' };
+  if (b.includes('google') || b.includes('gemini')) return { name: 'Google', badgeClass: 'cloud' };
+  if (b.includes('openai')) return { name: 'OpenAI', badgeClass: 'cloud' };
+  if (b.includes('localhost') || b.includes('11434')) return { name: 'Ollama Local', badgeClass: 'local' };
+  return { name: 'Cloud', badgeClass: 'cloud' };
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: FREE MODELS FROM KILO GATEWAY
+   ═══════════════════════════════════════════════════════════ */
+async function renderFreeModels() {
+  try {
+    const data = await apiGet('/kilo-free-models');
+    const grid = document.getElementById('free-models-grid');
+    const countEl = document.getElementById('free-models-count');
+    grid.innerHTML = '';
+
+    const models = data.models || [];
+    countEl.textContent = `${models.length} available`;
+
+    if (!models.length) {
+      grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg><p>No free models available — check gateway connection</p></div>';
+      return;
+    }
+
+    for (const m of models) {
+      const card = document.createElement('div');
+      card.className = 'model-card';
+      card.style.borderColor = 'rgba(34,197,94,0.15)';
+      card.innerHTML = `
+        <div class="model-card-header">
+          <div style="min-width:0">
+            <div class="model-alias" style="font-size:13px">${escapeHtml(m.id)}</div>
+            <span class="model-provider-badge free" style="margin-top:4px">Free · ${escapeHtml(m.provider)}</span>
+          </div>
+        </div>
+        <div class="model-actions">
+          <div class="model-select-row">
+            <select id="free-preset-target" aria-label="Target alias">
+              <option value="">— assign to alias —</option>
+              <option value="primary">primary</option>
+              <option value="fast">fast</option>
+              <option value="deep">deep</option>
+              <option value="explore">explore</option>
+            </select>
+          </div>
+          <button class="btn btn-success btn-sm" onclick="applyFreeModel('${escapeAttr(m.id)}', this)" style="width:100%">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+            Assign to alias
+          </button>
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+  } catch (e) {
+    console.error('Free models fetch failed:', e);
+    const grid = document.getElementById('free-models-grid');
+    grid.innerHTML = '<div class="empty-state" style="grid-column:1/-1"><p style="color:var(--accent-red)">Failed to fetch free models</p></div>';
+  }
+}
+
+async function applyFreeModel(modelId, btnEl) {
+  const card = btnEl.closest('.model-card');
+  const sel = card.querySelector('#free-preset-target');
+  const alias = sel.value;
+  if (!alias) { toast('Select a target alias first', 'error'); return; }
+  try {
+    const r = await apiPost(`/models/${encodeURIComponent(alias)}`, { model: `openai/${modelId}`, api_base: 'https://api.kilo.ai/api/gateway', api_key: 'os.environ/KILO_API_KEY' });
+    if (r.ok) { toast(`Assigned ${modelId} → ${alias}`, 'success'); renderModels(); renderFreeModels(); }
+    else { toast(r.detail || 'Failed to assign', 'error'); }
+  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
+}
+
+async function refreshFreeModels() {
+  await renderFreeModels();
+  toast('Free models refreshed', 'success');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: API KEYS (.env)
+   ═══════════════════════════════════════════════════════════ */
+const ENV_KEY_META = {
+  KILO_API_KEY: { label: 'Kilo Code', hint: 'free models via api.kilo.ai' },
+  KIMI_API_KEY: { label: 'Kimi (Moonshot)', hint: 'kimi-k2 via api.moonshot.cn' },
+};
+
+async function renderEnvKeys() {
+  try {
+    const data = await apiGet('/env-keys');
+    const grid = document.getElementById('keys-grid');
+    grid.innerHTML = '';
+
+    for (const [key, info] of Object.entries(data)) {
+      const meta = ENV_KEY_META[key] || { label: key, hint: '' };
+      const card = document.createElement('div');
+      card.className = 'model-card';
+      card.innerHTML = `
+        <div class="model-card-header">
+          <div>
+            <div class="model-alias">${escapeHtml(meta.label)}</div>
+            <span class="model-provider-badge ${info.set ? 'local' : 'cloud'}">${info.set ? 'Set · ' + escapeHtml(info.masked) : 'Not set'}</span>
+          </div>
+        </div>
+        <div class="model-api-base">${escapeHtml(key)}${meta.hint ? ' · ' + escapeHtml(meta.hint) : ''}</div>
+        <div class="model-actions">
+          <div class="model-custom-row">
+            <input id="envkey-${escapeAttr(key)}" type="password" placeholder="paste ${escapeAttr(key)} here" aria-label="${escapeAttr(key)}" autocomplete="off">
+            <button class="btn btn-primary btn-sm" onclick="saveEnvKey('${escapeAttr(key)}')">Save</button>
+          </div>
+        </div>
+      `;
+      grid.appendChild(card);
+    }
+  } catch (e) {
+    console.error('Env keys fetch failed:', e);
+  }
+}
+
+async function saveEnvKey(key) {
+  const input = document.getElementById(`envkey-${key}`);
+  const value = (input.value || '').trim();
+  if (!value) { toast('Paste a key first', 'error'); return; }
+  try {
+    const r = await apiPost('/env-keys', { key, value });
+    if (r.ok) {
+      input.value = '';
+      toast(`Saved ${key} (${r.masked}) — restart the gateway to apply`, 'success');
+      renderEnvKeys();
+    } else { toast(r.detail || 'Save failed', 'error'); }
+  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: AGENTS
+   ═══════════════════════════════════════════════════════════ */
+async function renderAgents() {
+  try {
+    const agents = await apiGet('/agents');
+    const tbody = document.getElementById('agents-tbody');
+    tbody.innerHTML = '';
+
+    document.getElementById('agent-count').textContent = `${agents.length} agent${agents.length !== 1 ? 's' : ''}`;
+
+    if (!agents.length) {
+      tbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="padding:40px"><p>No agents discovered</p></td></tr>';
+      return;
+    }
+
+    for (const a of agents) {
+      const tr = document.createElement('tr');
+      const safeId = a.path.replace(/[^a-zA-Z0-9]/g, '_');
+      const currentModel = a.model || '—';
+      tr.innerHTML = `
+        <td>
+          <div class="agent-name">${escapeHtml(a.name || a.path.split('/').pop())}</div>
+          <div class="agent-path mono">${escapeHtml(a.path)}</div>
+        </td>
+        <td><span class="agent-desc">${escapeHtml(a.description || '—')}</span></td>
+        <td><span class="mode-badge">${escapeHtml(a.mode || '—')}</span></td>
+        <td>
+          <select id="agent-model-${safeId}" data-path="${escapeAttr(a.path)}" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;font-family:var(--font-sans);cursor:pointer;min-width:200px;">
+            <option value="">— inherit default —</option>
+            ${['litellm/primary','litellm/fast','litellm/deep','litellm/explore'].map(m =>
+              `<option value="${escapeAttr(m)}" ${currentModel === m ? 'selected' : ''}>${escapeHtml(m)}</option>`
+            ).join('')}
+          </select>
+          <div class="text-xs text-muted mono mt-1">current: ${escapeHtml(currentModel)}</div>
+        </td>
+        <td><button class="btn btn-primary btn-sm" onclick="saveAgent('${escapeAttr(a.path)}')">Save</button></td>
+      `;
+      tbody.appendChild(tr);
+    }
+  } catch (e) {
+    console.error('Agents fetch failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: EXTENSIONS
+   ═══════════════════════════════════════════════════════════ */
+async function renderExtensions() {
+  try {
+    const data = await apiGet('/extensions');
+    const grid = document.getElementById('extensions-grid');
+    grid.innerHTML = '';
+
+    document.getElementById('ext-count').textContent = `${data.length} found`;
+
+    if (!data.length) {
+      grid.innerHTML = '<div class="empty-state"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg><p>No extensions found</p></div>';
+      return;
+    }
+
+    for (const ext of data) {
+      const card = document.createElement('div');
+      card.className = 'extension-card';
+      card.innerHTML = `
+        <div class="ext-header">
+          <div class="ext-icon"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg></div>
+          <div>
+            <div class="ext-name">${escapeHtml(ext.project)}</div>
+            <div class="ext-path mono">${escapeHtml(ext.path)}</div>
+          </div>
+        </div>
+        <div class="ext-stats">
+          <span class="ext-stat"><strong>${ext.rules}</strong> rules</span>
+          <span class="ext-stat"><strong>${ext.skills}</strong> skills</span>
+          <span class="ext-stat"><strong>${ext.agents}</strong> agents</span>
+        </div>
+        ${ext.has_state || ext.has_vault ? `
+        <div class="ext-flags">
+          ${ext.has_state ? '<span class="ext-flag">State</span>' : ''}
+          ${ext.has_vault ? '<span class="ext-flag">Vault</span>' : ''}
+        </div>` : ''}
+      `;
+      grid.appendChild(card);
+    }
+  } catch (e) {
+    console.error('Extensions fetch failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   RENDER: TOOLS
+   ═══════════════════════════════════════════════════════════ */
+async function renderTools() {
+  try {
+    const data = await apiGet('/tools');
+    const list = document.getElementById('tools-list');
+    list.innerHTML = '';
+
+    const tools = data.pipa_tools || [];
+    if (!tools.length) {
+      list.innerHTML = '<div class="empty-state"><p>No tools found</p></div>';
+      return;
+    }
+
+    for (const t of tools) {
+      const item = document.createElement('div');
+      item.className = 'tool-item';
+      item.innerHTML = `
+        <div class="tool-info">
+          <div>
+            <div class="tool-name">${escapeHtml(t.name)}</div>
+            <div class="tool-path mono">${escapeHtml(t.path)}</div>
+          </div>
+        </div>
+        <span class="tool-status ${t.exec ? 'exec' : 'static'}">${t.exec ? 'Executable' : 'Static'}</span>
+      `;
+      list.appendChild(item);
+    }
+  } catch (e) {
+    console.error('Tools fetch failed:', e);
+  }
+}
+
+/* ═══════════════════════════════════════════════════════════
+   ACTIONS
+   ═══════════════════════════════════════════════════════════ */
 async function applyPreset(alias) {
-  const sel = $(`preset-${alias}`);
+  const sel = document.getElementById(`preset-${alias}`);
   const presetId = sel.value;
-  if (!presetId) { toast("select a preset", true); return; }
-  const r = await post(`/models/${encodeURIComponent(alias)}`, { preset_id: presetId });
-  if (r.ok) { toast(`Updated ${alias} → ${r.model}`); renderModels(); }
-  else { toast("update failed: " + (r.detail || ""), true); }
+  if (!presetId) { toast('Select a preset first', 'error'); return; }
+  try {
+    const r = await apiPost(`/models/${encodeURIComponent(alias)}`, { preset_id: presetId });
+    if (r.ok) { toast(`Updated ${alias} → ${r.model}`, 'success'); renderModels(); }
+    else { toast(r.detail || 'Update failed', 'error'); }
+  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
 }
 
 async function applyCustom(alias) {
-  const model = $(`custom-${alias}`).value.trim();
-  const api_base = $(`base-${alias}`).value.trim();
-  const api_key = $(`key-${alias}`).value.trim();
-  if (!model) { toast("model required", true); return; }
-  const r = await post(`/models/${encodeURIComponent(alias)}`, { model, api_base, api_key });
-  if (r.ok) { toast(`Updated ${alias} → ${model}`); renderModels(); }
-  else { toast("update failed: " + (r.detail || ""), true); }
+  const model = document.getElementById(`custom-${alias}`).value.trim();
+  if (!model) { toast('Model ID is required', 'error'); return; }
+  try {
+    const r = await apiPost(`/models/${encodeURIComponent(alias)}`, { model });
+    if (r.ok) { toast(`Updated ${alias} → ${model}`, 'success'); renderModels(); }
+    else { toast(r.detail || 'Update failed', 'error'); }
+  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
 }
 
 async function resetModel(alias) {
-  if (!confirm(`Reset ${alias} to default local ollama model?`)) return;
-  const r = await post(`/models/${encodeURIComponent(alias)}/reset`, {});
-  if (r.ok) { toast(`Reset ${alias} to default`); renderModels(); }
-  else { toast("reset failed", true); }
+  try {
+    const r = await apiPost(`/models/${encodeURIComponent(alias)}/reset`, {});
+    if (r.ok) { toast(`Reset ${alias} to default`, 'success'); renderModels(); }
+    else { toast('Reset failed', 'error'); }
+  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
 }
 
-async function restartGateway() {
-  if (!confirm("Restart LiteLLM gateway? This will briefly interrupt active sessions.")) return;
-  const r = await post(`/gateway/restart`, {});
-  if (r.ok) { toast(r.detail || "gateway stopped — run pipa-up.sh to restart"); }
-  else { toast("restart failed: " + (r.detail || ""), true); }
-}
-
-async function renderExtensions() {
-  const data = await get("/extensions");
-  const el = $("extensions");
-  el.innerHTML = "";
-  if (!data.length) {
-    el.innerHTML = `<div class="empty">No .harness_extension/ projects found</div>`;
-    return;
-  }
-  for (const ext of data) {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <div>
-        <div class="value">${ext.project}</div>
-        <div class="muted" style="margin-top:4px">
-          ${ext.rules} rules · ${ext.skills} skills · ${ext.agents} agents
-          ${ext.has_state ? "· state" : ""} ${ext.has_vault ? "· vault" : ""}
-        </div>
-        <div class="muted" style="font-size:11px;margin-top:4px">${ext.path}</div>
-      </div>
-    `;
-    el.appendChild(card);
-  }
-}
-
-async function renderAgents() {
-  const agents = await get("/agents");
-  const tbody = $("agents");
-  tbody.innerHTML = "";
-  for (const a of agents) {
-    const currentModel = a.model || "—";
-    const tr = document.createElement("tr");
-    tr.innerHTML = `
-      <td><strong>${a.name || a.path}</strong></td>
-      <td class="muted">${a.path}</td>
-      <td class="muted">${a.description || ""}</td>
-      <td><span class="tag">${a.mode || "—"}</span></td>
-      <td>
-        <select id="sel-${a.path.replace(/[^a-zA-Z0-9]/g, "_")}" data-path="${a.path}">
-          <option value="">— default —</option>
-          ${["litellm/primary","litellm/fast","litellm/deep","litellm/explore"].map(m => `<option value="${m}" ${currentModel === m ? "selected" : ""}>${m}</option>`).join("")}
-        </select>
-        <div class="muted" style="font-size:11px;margin-top:4px">file: ${currentModel}</div>
-      </td>
-      <td style="text-align:right"><button onclick="saveAgent('${a.path.replace(/'/g, "\\'")}')">Save</button></td>
-    `;
-    tbody.appendChild(tr);
-  }
+async function resetAllModels() {
+  showModal('Reset All Models',
+    '<p>Reset all LLM aliases to their default local Ollama models? This will modify <code class="mono">config/litellm.yaml</code>.</p>',
+    async () => {
+      const aliases = ['primary', 'fast', 'deep', 'explore'];
+      let ok = 0, fail = 0;
+      for (const a of aliases) {
+        try {
+          const r = await apiPost(`/models/${a}/reset`, {});
+          if (r.ok) ok++; else fail++;
+        } catch { fail++; }
+      }
+      toast(`Reset complete: ${ok} ok, ${fail} failed`, fail ? 'error' : 'success');
+      renderModels();
+    }
+  );
 }
 
 async function saveAgent(path) {
-  const sel = document.querySelector(`select[data-path="${path}"]`);
+  const safeId = path.replace(/[^a-zA-Z0-9]/g, '_');
+  const sel = document.getElementById(`agent-model-${safeId}`);
+  if (!sel) return;
   const model = sel.value;
-  const r = await fetch(`/api/agent-file/${encodeURIComponent(path)}`, {
-    method: "PUT",
-    headers: {"Content-Type": "application/json"},
-    body: JSON.stringify({ model })
-  });
-  if (!r.ok) { toast("save failed", true); return; }
-  toast(`Saved ${path} → ${model || "default"}`);
-  renderAgents();
+  try {
+    const r = await apiPut(`/agent-file/${encodeURIComponent(path)}`, { model });
+    if (r.ok) { toast(`Saved ${path.split('/').pop()} → ${model || 'default'}`, 'success'); renderAgents(); }
+    else { toast('Save failed', 'error'); }
+  } catch (e) { toast('Request failed: ' + e.message, 'error'); }
 }
 
-async function renderTools() {
-  const data = await get("/tools");
-  const el = $("tools");
-  el.innerHTML = "";
-  for (const t of data.pipa_tools) {
-    const card = document.createElement("div");
-    card.className = "card";
-    card.innerHTML = `
-      <div>
-        <div class="value">${t.name}</div>
-        <div class="muted" style="font-size:11px;margin-top:4px">${t.path}</div>
-      </div>
-      <div><span class="tag">${t.exec ? "exec" : "static"}</span></div>
-    `;
-    el.appendChild(card);
-  }
-}
-
-function tick() {
-  const now = new Date();
-  $("clock").textContent = `Local · ${now.toLocaleString()}`;
+async function restartGateway() {
+  showModal('Restart LiteLLM Gateway',
+    '<p>The gateway will be restarted in place with the current <code class="mono">.env</code> keys loaded.</p><p style="margin-top:8px;color:var(--text-muted)">Active sessions will be briefly interrupted.</p>',
+    async () => {
+      try {
+        const r = await apiPost('/gateway/restart', {});
+        if (r.ok) { toast(r.detail || 'Gateway restarted', 'success'); setTimeout(renderStatus, 2000); }
+        else { toast(r.detail || 'Restart failed', 'error'); }
+      } catch (e) { toast('Request failed: ' + e.message, 'error'); }
+    }
+  );
 }
 
 async function refreshAll() {
-  await Promise.all([renderStatus(), renderModels(), renderExtensions(), renderAgents(), renderTools()]);
-  toast("refreshed");
+  await Promise.all([renderStatus(), renderEnvKeys(), renderModels(), renderAgents(), renderExtensions(), renderTools()]);
+  toast('Dashboard refreshed', 'success');
 }
 
-(async function init() {
-  tick();
-  setInterval(tick, 1000);
-  await Promise.all([renderStatus(), renderModels(), renderExtensions(), renderAgents(), renderTools()]);
+/* ═══════════════════════════════════════════════════════════
+   UTILITY
+   ═══════════════════════════════════════════════════════════ */
+function escapeHtml(str) {
+  const div = document.createElement('div');
+  div.textContent = str;
+  return div.innerHTML;
+}
+
+function escapeAttr(str) {
+  return str.replace(/'/g, '&#39;').replace(/"/g, '&quot;');
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INTERSECTION OBSERVER — Nav highlighting on scroll
+   ═══════════════════════════════════════════════════════════ */
+function initNavObserver() {
+  const observer = new IntersectionObserver((entries) => {
+    entries.forEach(entry => {
+      if (entry.isIntersecting) {
+        const id = entry.target.id.replace('-section', '');
+        document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+        const navItem = document.querySelector(`.nav-item[data-section="${id}"]`);
+        if (navItem) navItem.classList.add('active');
+      }
+    });
+  }, { threshold: 0.3, rootMargin: '-80px 0px -60% 0px' });
+
+  ['status-section', 'keys-section', 'models-section', 'free-models-section', 'agents-section', 'extensions-section', 'tools-section'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) observer.observe(el);
+  });
+}
+
+/* ═══════════════════════════════════════════════════════════
+   INITIALIZATION
+   ═══════════════════════════════════════════════════════════ */
+async function init() {
+  updateClock();
+  setInterval(updateClock, 1000);
+
+  await Promise.all([
+    renderStatus(),
+    renderEnvKeys(),
+    renderModels(),
+    renderFreeModels(),
+    renderAgents(),
+    renderExtensions(),
+    renderTools()
+  ]);
+
+  // Auto-refresh status every 5s
   setInterval(renderStatus, 5000);
-})();
+
+  // Init nav scroll observer
+  setTimeout(initNavObserver, 500);
+}
+
+document.addEventListener('DOMContentLoaded', init);
 </script>
 </body>
 </html>
