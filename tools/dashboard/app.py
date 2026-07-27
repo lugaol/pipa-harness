@@ -115,6 +115,31 @@ def cmd_ok(cmd: list[str], timeout: int = 3) -> tuple[bool, str]:
     except Exception as e:
         return False, str(e)
 
+def discover_project_root() -> Optional[Path]:
+    """Find the active project root from CWD or from siblings of the harness root."""
+    # 1. Current working directory's git root, if it has a harness extension
+    try:
+        cwd = Path.cwd()
+        git_root = subprocess.run(
+            ["git", "-C", str(cwd), "rev-parse", "--show-toplevel"],
+            capture_output=True, text=True, check=True, timeout=3
+        ).stdout.strip()
+        root = Path(git_root)
+        if (root / ".harness_extension").is_dir():
+            return root
+    except Exception:
+        pass
+
+    # 2. Sibling directories of the harness root that contain .harness_extension
+    try:
+        for candidate in ROOT.parent.iterdir():
+            if candidate.is_dir() and candidate != ROOT and (candidate / ".harness_extension").is_dir():
+                return candidate
+    except Exception:
+        pass
+
+    return None
+
 def harness_status() -> dict:
     checks = {}
 
@@ -127,8 +152,9 @@ def harness_status() -> dict:
     ok, out = cmd_ok(["opencode", "--version"])
     checks["opencode"] = {"up": ok, "detail": out[:40] if ok else "not installed"}
 
-    # Use project root for graphify (find git root)
-    gpath = Path("/Users/noname/Development/jamming/graphify-out/graph.json")
+    # Use project root for graphify (discovered from CWD or harness siblings)
+    project_root = discover_project_root()
+    gpath = (project_root / "graphify-out" / "graph.json") if project_root else Path.cwd() / "graphify-out" / "graph.json"
     checks["graphify"] = {"up": gpath.exists(), "detail": "graph.json present" if gpath.exists() else "no graph yet"}
 
     ok, _ = cmd_ok(["ls", "-d", "/Applications/Emdash.app"]) if sys.platform == "darwin" else cmd_ok(["emdash", "--version"])
@@ -291,9 +317,14 @@ def write_litellm_config(data: dict) -> None:
         raise HTTPException(500, f"Failed to write config: {e}")
 
 def update_opencode_config(alias: str, model: str) -> None:
-    """Update jamming/.opencode/opencode.jsonc with model info for visualization."""
+    """Update the active project's .opencode/opencode.jsonc with model info
+    for visualization. The project is discovered from CWD or from siblings of
+    the harness root."""
     try:
-        opencode_path = ROOT.parent / "jamming" / ".opencode" / "opencode.jsonc"
+        project_root = discover_project_root()
+        if project_root is None:
+            return
+        opencode_path = project_root / ".opencode" / "opencode.jsonc"
         if not opencode_path.exists():
             return
         import json

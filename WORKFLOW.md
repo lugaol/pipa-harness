@@ -185,7 +185,7 @@ Override via env: `LITELLM_MODEL_FAST`, `LITELLM_MODEL_PRIMARY`, etc.
 
 ## Pattern J: Extension model (project-local customization)
 
-New model: `.harness_extension/` in each project (replaces deprecated `squads/`).
+New model: `.harness_extension/` in each project.
 
 ```
 .harness_extension/

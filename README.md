@@ -43,7 +43,15 @@ Result: lower token costs, less context bloat, and zero conversation loss across
 
 ## Quick start
 
-### 1. Install
+### One-command install (from a clean machine)
+
+```bash
+curl -fsSL https://raw.githubusercontent.com/lugaol/pipa-harness/main/bootstrap.sh | bash
+```
+
+This downloads the harness to `~/.local/share/pipa-harness`, adds it to your shell `PATH`, installs dependencies (`uv`, `ollama`, `litellm`, `graphify`, `opencode`, `obsidian`, `emdash`), and starts services. If API keys are not set, it falls back to a free-only Ollama-based config so you can start immediately.
+
+### Or install from a local clone
 
 ```bash
 # Clone the harness
@@ -54,15 +62,7 @@ cd pipa-harness
 ./bin/pipa-up.sh
 ```
 
-This installs: `uv`, `ollama`, `litellm`, `graphify`, `opencode`, `obsidian`, `emdash`, and starts services.
-
-### 2. Start the gateway
-
-```bash
-litellm --config config/litellm.yaml --port 4000
-```
-
-### 3. Run OpenCode
+### Run OpenCode
 
 ```bash
 opencode
@@ -70,7 +70,7 @@ opencode
 
 OpenCode reads `AGENTS.md` automatically. You're ready to go.
 
-### 4. Open the dashboard
+### Open the dashboard
 
 ```bash
 # In another terminal
@@ -86,32 +86,43 @@ bin/dashboard.sh start
 
 ```bash
 cd /path/to/your-project
-/path/to/pipa-harness/install.sh
+pipa-up
 ```
 
-Idempotent: creates `.harness_extension/`, `.opencode/`, and symlinks root `AGENTS.md`. Never overwrites existing files.
+Idempotent: creates `.harness_extension/`, `.opencode/`, symlinks root `AGENTS.md`, and auto-fills `AGENTS.md` placeholders from detected project facts. Never overwrites existing files.
+
+### Pick a project-type template
+
+```bash
+cd /path/to/your-android-project
+pipa-up --init android
+```
+
+Available templates live in `templates/project/`. Each overlays domain-specific rules, skills, and routing on top of the generic scaffold. You can add new templates by copying `templates/project/generic/`.
 
 ### Or use the wrapper
 
 ```bash
-# From any project after pipa-up.sh
-pipa-up.sh            # scaffold + wire
-pipa-up.sh --status   # report only
-pipa-up.sh --stop     # stop services
+# From any project after pipa-up
+pipa-up            # scaffold + wire
+pipa-up --status   # report only
+pipa-up --stop     # stop services
+pipa-up --init android   # scaffold with the Android template
 ```
 
 ## Layout
 
 ```
+bootstrap.sh         one-command installer (curl | bash)
 AGENTS.md            always-loaded router (the only injected context)
 rules/               path-scoped rules (git, testing, security, code-review)
 skills/              trigger-loaded skills (debugging, release, performance, ...)
 agents/              subagents: analyst → pm → architect → sm → dev → qa, explorer, researcher
 specs/               two-phase plan→story workflow output
-bin/                 litellm-task.sh, pipa-up.sh, dashboard.sh
-config/              litellm.yaml — every model alias lives here
+bin/                 litellm-task.sh, pipa-up.sh, dashboard.sh, pipa-init-project.py, pipa-extension-check.sh
+config/              litellm.yaml + litellm.free.yaml — every model alias lives here
 tools/               dashboard (FastAPI, :8080), tracing, evals, memory store
-templates/           .harness_extension/ scaffold + .opencode/ + emdash scripts
+templates/           .harness_extension/ scaffold + .opencode/ + project-type templates + emdash scripts
 vault/               dated memory (decisions, research) with as_of/valid_until
 state/               SESSION.md (warm resume) + PLAN.md (task ledger)
 ```
@@ -223,7 +234,7 @@ python3 tools/memory_store/query.py "blow detection"
 
 ## Migration
 
-- `pipa-extend.sh` + `squads/` are deprecated. Migrate to `.harness_extension/`.
+- The legacy `pipa-extend.sh` + `squads/` extension model has been removed. Use `.harness_extension/` per project instead.
 - The old Ollama/Kilo wrappers (`harness/bin` → `~/harness/bin`) are retired. Use `pipa_harness/bin/litellm-task.sh` instead.
 
 ## License

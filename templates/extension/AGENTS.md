@@ -1,6 +1,6 @@
-# <Project name> — pipa harness extension
+# {{PROJECT_NAME}} — pipa harness extension
 
-One-line description of the project.
+{{PROJECT_DESCRIPTION}}
 
 This `.harness_extension/` directory carries only project-specific context.
 The base rules, skills, agents, and workflow come from the globally installed
@@ -12,8 +12,8 @@ project's facts; delete what you don't need.
 - Add project-specific invariants here (e.g. performance budgets, conventions).
 
 ## Commands
-- Build: `<build command>`
-- Tests: `<test command>`
+- Build: `{{BUILD_COMMAND}}`
+- Tests: `{{TEST_COMMAND}}`
 
 ## Routing (load ONLY when the trigger matches)
 | Task involves...        | Load                                   |

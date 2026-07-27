@@ -14,8 +14,6 @@ state/*.log
 
 # extension machinery (local merges stay local)
 .pipa-extensions/
-squads/projects/*
-!squads/projects/README.md
 
 # OS
 .DS_Store

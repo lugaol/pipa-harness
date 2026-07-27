@@ -17,6 +17,9 @@
 #   bin/pipa-up.sh --stop       stop the services started by this script
 #   bin/pipa-up.sh --no-pull    skip ollama model downloads
 #   bin/pipa-up.sh --no-apps    skip GUI apps (obsidian, emdash)
+#   bin/pipa-up.sh --init TYPE  scaffold project with a project-type template
+#                               (generic, android, ...) when run from a project root
+#                               see templates/project/ for available types
 #
 # Platforms: macOS (brew for GUI apps) and Linux (apt/dnf/pacman/flatpak/
 # AppImage, best effort). Idempotent: safe to re-run anytime.
@@ -32,14 +35,16 @@ mkdir -p "$STATE"
 MODE=up
 PULL_MODELS=1
 GUI_APPS=1
-for arg in "$@"; do
-  case "$arg" in
-    --status)  MODE=status ;;
-    --stop)    MODE=stop ;;
-    --no-pull) PULL_MODELS=0 ;;
-    --no-apps) GUI_APPS=0 ;;
-    -h|--help) grep '^#' "$0" | head -20; exit 0 ;;
-    *) echo "unknown flag: $arg" >&2; exit 2 ;;
+INIT_TYPE=generic
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --status)  MODE=status; shift ;;
+    --stop)    MODE=stop; shift ;;
+    --no-pull) PULL_MODELS=0; shift ;;
+    --no-apps) GUI_APPS=0; shift ;;
+    --init)    INIT_TYPE="${2:-generic}"; shift 2 ;;
+    -h|--help) grep '^#' "$0" | head -25; exit 0 ;;
+    *) echo "unknown flag: $1" >&2; exit 2 ;;
   esac
 done
 
@@ -64,6 +69,26 @@ wait_http() { # wait_http <url> <seconds> — 0 on response
   done
   return 1
 }
+
+# ── config selection ─────────────────────────────────────────────────────────
+# Use the full config when both API keys are present; otherwise fall back to
+# the free-only config (Ollama + Kilo free models) so the harness works out of
+# the box without requiring the user to set up keys first.
+pick_litellm_config() {
+  if [ -n "${KILO_API_KEY:-}" ] && [ -n "${KIMI_API_KEY:-}" ] && [ -f "$ROOT/config/litellm.yaml" ]; then
+    CONFIG="$ROOT/config/litellm.yaml"
+    return
+  fi
+  if [ -f "$ROOT/config/litellm.free.yaml" ]; then
+    warn "API keys missing (KILO_API_KEY and/or KIMI_API_KEY); using free-only config"
+    warn "Set both keys and re-run pipa-up to use the full-quality model aliases"
+    CONFIG="$ROOT/config/litellm.free.yaml"
+  else
+    CONFIG="$ROOT/config/litellm.yaml"
+  fi
+}
+
+pick_litellm_config
 
 # ── stop mode ─────────────────────────────────────────────────────────────
 if [ "$MODE" = "stop" ]; then
@@ -337,12 +362,24 @@ scaffold_project() {
   target="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
   [ "$target" = "$ROOT" ] && return 0
   [ "$MODE" = status ] && { warn "project not scaffolded: $target (run pipa-up here)"; return; }
-  add "scaffolding project in $target"
-  (cd "$target" && "$ROOT/install.sh") || warn "install.sh failed for $target"
+  add "scaffolding project in $target (type: $INIT_TYPE)"
+  (cd "$target" && PIPA_PROJECT_TYPE="$INIT_TYPE" "$ROOT/install.sh") || warn "install.sh failed for $target"
   if [ ! -e "$target/pipa-up" ]; then
     cp "$ROOT/templates/extension/pipa-up" "$target/pipa-up"
     chmod +x "$target/pipa-up"
     add "pipa-up -> project root"
+  fi
+}
+
+# ── extension health check ──────────────────────────────────────────────────
+
+check_extension() {
+  target="$(git rev-parse --show-toplevel 2>/dev/null)" || return 0
+  [ "$target" = "$ROOT" ] && return 0
+  [ "$MODE" = status ] && return 0
+  if [ -x "$ROOT/bin/pipa-extension-check.sh" ]; then
+    add "extension health check"
+    "$ROOT/bin/pipa-extension-check.sh" "$target" || warn "extension health check failed"
   fi
 }
 
@@ -370,6 +407,7 @@ say ""
 persist_path
 setup_global_opencode
 scaffold_project
+check_extension
 
 say ""
 if [ "$MODE" = status ]; then
