@@ -1,9 +1,9 @@
 model_list:
 - model_name: primary
   litellm_params:
-    model: openai/kimi-k3
-    api_base: https://api.moonshot.cn/v1
-    api_key: os.environ/KIMI_API_KEY
+    model: kwaipilot/kat-coder-pro-v2.5:free
+    api_base: https://api.kilo.ai/api/gateway
+    api_key: os.environ/KILO_API_KEY
     custom_llm_provider: openai
 - model_name: fast
   litellm_params:
@@ -13,15 +13,15 @@ model_list:
     custom_llm_provider: openai
 - model_name: deep
   litellm_params:
-    model: nvidia/nemotron-3.5-content-safety:free
-    api_base: https://api.kilo.ai/api/gateway
-    api_key: os.environ/KILO_API_KEY
+    model: openai/kimi-k2.7-code
+    api_base: https://api.moonshot.cn/v1
+    api_key: os.environ/KIMI_API_KEY
     custom_llm_provider: openai
 - model_name: explore
   litellm_params:
-    model: openrouter/free
-    api_base: https://api.kilo.ai/api/gateway
-    api_key: os.environ/KILO_API_KEY
+    model: openai/qwen3:4b
+    api_base: http://localhost:11434/v1
+    api_key: ollama
     custom_llm_provider: openai
 - model_name: kilo-free
   litellm_params:
@@ -33,21 +33,14 @@ litellm_settings:
   drop_params: true
   num_retries: 2
   request_timeout: 300
-  # Context compaction: if tool results exceed this many lines, summarize them
   compress_tool_results: true
   compress_threshold_lines: 200
-  # Token budgeting: agents should keep context under this % of model window
   context_budget: 0.5
-  # Prompt caching: cache stable prefixes (system prompt, read-only files)
   cache_prompt: true
-  # Session summaries: rolling summaries for long conversations
   session_summaries: true
-  # Prompt caching: cache stable prefixes (system prompt, read-only files)
-  # Supports Anthropic prompt caching and OpenAI cache_control
-  cache_prompt: true
   cache_control:
     enabled: true
-    provider: auto  # auto-detect Anthropic vs OpenAI
+    provider: auto
 router_settings:
   routing_strategy: simple-shuffle
   fallbacks:
