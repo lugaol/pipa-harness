@@ -19,9 +19,9 @@ model_list:
     custom_llm_provider: openai
 - model_name: explore
   litellm_params:
-    model: openai/qwen2.5-coder:7b
-    api_base: http://localhost:11434/v1
-    api_key: ollama
+    model: stepfun/step-3.7-flash:free
+    api_base: https://api.kilo.ai/api/gateway
+    api_key: os.environ/KILO_API_KEY
     custom_llm_provider: openai
 - model_name: kilo-free
   litellm_params:

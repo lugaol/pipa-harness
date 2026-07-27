@@ -1,0 +1,13 @@
+.git/
+state/
+graphify-out/
+.env
+__pycache__/
+*.pyc
+*.pyo
+*.log
+.DS_Store
+.obsidian/
+*.swp
+*.swo
+*~

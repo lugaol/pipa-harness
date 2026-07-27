@@ -9,7 +9,11 @@
 # Requires: litellm proxy running at $LITELLM_URL (default http://localhost:4000)
 set -eu
 
-ROLE="${1:-}"; PROMPT="${*:2}"
+ROLE="${1:-}"
+if [ -n "$ROLE" ]; then
+    shift
+    PROMPT="$*"
+fi
 [ -n "$ROLE" ] && [ -n "$PROMPT" ] || { echo "usage: $0 <fast|primary|deep|explore|kilo-free> <prompt>" >&2; exit 2; }
 
 URL="${LITELLM_URL:-http://localhost:4000}"

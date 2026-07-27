@@ -22,6 +22,8 @@ ML: rawB=0.58 | pressure=0.371 blow=1 | rms=0.0271'
 P_JSON='Extract nodes and edges from this text as strict JSON only: {"nodes":[{"id":str,"type":str}],"edges":[{"from":str,"to":str,"relation":str}]}
 "The controller analyzes input and sets a flag. The synth reads the flag and opens the gate. The bridge connects the UI to the synth."'
 
+FAILED=0
+
 run_task () { # model, label, prompt, expect_regex
   local model="$1" label="$2" prompt="$3" expect="$4"
   local t0 out dt
@@ -34,7 +36,11 @@ print(json.dumps({"model":sys.argv[1],"messages":[{"role":"user","content":sys.a
     | python3 -c 'import json,sys; print(json.load(sys.stdin)["choices"][0]["message"]["content"])' 2>/dev/null || echo "(error)")
   dt=$(python3 -c "import time,sys; print(f'{time.time()-float(sys.argv[1]):.1f}')" "$t0")
   local verdict="FAIL"
-  echo "$out" | grep -qiE "$expect" && verdict="pass"
+  if echo "$out" | grep -qiE "$expect"; then
+      verdict="PASS"
+  else
+      FAILED=$((FAILED + 1))
+  fi
   printf "%-12s %-14s %-6s %6ss | %s\n" "$model" "$label" "$verdict" "$dt" "$(echo "$out" | tr '\n' ' ' | cut -c1-90)"
 }
 
@@ -48,3 +54,11 @@ for m in "${MODELS[@]}"; do
   run_task "$m" "json-schema"   "$P_JSON" '"nodes"'
   echo "------------ -------------- ------ -------+------------------"
 done
+
+if [ "$FAILED" -gt 0 ]; then
+    echo ""
+    echo "MODEL BATTERY: FAIL ($FAILED task(s) failed)"
+    exit 1
+fi
+echo ""
+echo "MODEL BATTERY: PASS"

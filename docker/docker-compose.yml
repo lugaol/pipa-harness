@@ -1,0 +1,75 @@
+services:
+  pipa-local-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_MODE: local
+    image: pipa-harness:local
+    command: ["test"]
+    profiles: ["test"]
+
+  pipa-bootstrap-test:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_MODE: bootstrap
+    image: pipa-harness:bootstrap
+    command: ["test"]
+    profiles: ["test"]
+
+  pipa-local-battery:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_MODE: local
+    image: pipa-harness:local
+    command: ["battery"]
+    volumes:
+      - pipa-battery-state:/tmp/pipa-battery-state
+    profiles: ["battery"]
+
+  pipa-bootstrap-battery:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_MODE: bootstrap
+    image: pipa-harness:bootstrap
+    command: ["battery"]
+    volumes:
+      - pipa-battery-state:/tmp/pipa-battery-state
+    profiles: ["battery"]
+
+  pipa-local-serve:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_MODE: local
+    image: pipa-harness:local
+    command: ["serve"]
+    ports:
+      - "4000:4000"
+      - "11434:11434"
+      - "8080:8080"
+    profiles: ["serve"]
+
+  pipa-bootstrap-serve:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile
+      args:
+        INSTALL_MODE: bootstrap
+    image: pipa-harness:bootstrap
+    command: ["serve"]
+    ports:
+      - "4000:4000"
+      - "11434:11434"
+      - "8080:8080"
+    profiles: ["serve"]
+
+volumes:
+  pipa-battery-state:

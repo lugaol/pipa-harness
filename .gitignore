@@ -20,3 +20,4 @@ state/*.log
 
 # Obsidian workspace state (committed app config stays)
 .obsidian/workspace*.json
+state/*.db
