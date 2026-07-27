@@ -1906,7 +1906,7 @@ async function resetModel(alias) {
 
 async function resetAllModels() {
   showModal('Reset All Models',
-    '<p>Reset all LLM aliases to their default local Ollama models? This will modify <code class="mono">config/litellm.yaml</code>.</p>',
+    '<p>Reset all LLM aliases to their default models? This will modify <code class="mono">config/litellm.yaml</code>.</p>',
     async () => {
       const aliases = ['primary', 'fast', 'deep', 'explore'];
       let ok = 0, fail = 0;

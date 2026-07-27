@@ -270,28 +270,7 @@ pull_models() {
   [ "$PULL_MODELS" = 1 ] || return 0
   have ollama || return 0
   curl -s -m 2 -o /dev/null "http://localhost:$OLLAMA_PORT" || return 0
-  models="$(awk '
-    /^- model_name:/ { in_model = 1 }
-    in_model && /model: openai\// { model_line = $0 }
-    in_model && /api_base:.*localhost:11434/ { pull = 1 }
-    in_model && /^[^[:space:]]/ {
-      if (pull && model_line) {
-        sub(/.*openai\//, "", model_line)
-        sub(/ *#.*/, "", model_line)
-        sub(/[[:space:]]*$/, "", model_line)
-        print model_line
-      }
-      in_model = 0; pull = 0; model_line = ""
-    }
-    END {
-      if (pull && model_line) {
-        sub(/.*openai\//, "", model_line)
-        sub(/ *#.*/, "", model_line)
-        sub(/[[:space:]]*$/, "", model_line)
-        print model_line
-      }
-    }
-  ' "$CONFIG" | sort -u)"
+  models="$(python3 "$ROOT/bin/pipa-pull-ollama-models.py" "$CONFIG" 2>/dev/null | sort -u)"
   for m in $models; do
     if ollama list | awk '{print $1}' | grep -qx "$m"; then
       ok "model present: $m"

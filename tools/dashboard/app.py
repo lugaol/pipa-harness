@@ -287,9 +287,9 @@ PRESET_MODELS = [
     {"id": "moonshot-v1-32k-vision-preview", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-32k-vision-preview", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 Vision — 32k"},
     {"id": "moonshot-v1-128k-vision-preview", "provider": "Kimi (Moonshot)", "model": "openai/moonshot-v1-128k-vision-preview", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY", "custom_llm_provider": "openai", "description": "Moonshot V1 Vision — 128k"},
 
-    # Ollama local models
-    {"id": "gpt-oss:20b", "provider": "Ollama (local)", "model": "openai/gpt-oss:20b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 20B — primary coding"},
-    {"id": "qwen3:8b", "provider": "Ollama (local)", "model": "openai/qwen3:8b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 8B — fast, tool-calling"},
+    # Ollama local models — only Qwen2.5 Coder (light + heavy) are pre-pulled
+    {"id": "qwen2.5-coder:7b", "provider": "Ollama (local)", "model": "openai/qwen2.5-coder:7b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 7B — fast, coding"},
+    {"id": "qwen2.5-coder:14b", "provider": "Ollama (local)", "model": "openai/qwen2.5-coder:14b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "description": "Local 14B — heavy, coding"},
 
     # Other cloud providers
     {"id": "claude-sonnet-4-5", "provider": "Anthropic (cloud)", "model": "anthropic/claude-sonnet-4-5", "api_base": "", "api_key": "os.environ/ANTHROPIC_API_KEY", "description": "Claude Sonnet 4.5 — strong reasoning"},
@@ -563,10 +563,10 @@ def api_set_model(alias: str, payload: dict):
 @app.post("/api/models/{alias}/reset")
 def api_reset_model(alias: str):
     defaults = {
-        "primary": {"model": "openai/kimi-k3", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY"},
-        "fast": {"model": "inclusionai/ling-3.0-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
-        "deep": {"model": "kilo-auto/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
-        "explore": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "primary": {"model": "kwaipilot/kat-coder-pro-v2.5:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "fast": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "deep": {"model": "openai/kimi-k2.7-code", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY"},
+        "explore": {"model": "openai/qwen2.5-coder:7b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "custom_llm_provider": "openai"},
     }
     if alias not in defaults:
         raise HTTPException(404, "unknown alias")

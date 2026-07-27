@@ -36,7 +36,7 @@ Result: lower token costs, less context bloat, and zero conversation loss across
 
 ## Current status
 
-- **Stable** — used in production for Android audio app development (Jam Instrument)
+- **Stable** — used in production for Android audio app development
 - **Active development** — see [vault/research/agent-framework-sota-2026.md](vault/research/agent-framework-sota-2026.md) for latest SOTA patterns adopted
 - **Compatible** — works with OpenCode, LiteLLM, graphify, Obsidian, emdash
 - **Tested** — agent behavioral evals pass (transparency, approval gates, golden rules)
@@ -133,7 +133,7 @@ state/               SESSION.md (warm resume) + PLAN.md (task ledger)
 AGENTS.md            project-specific router (symlinked from root)
 rules/               project-scoped rules (audio-ndk, ui-xml, ...)
 skills/              project-specific skills (blow-detection, gesture-mapping, ...)
-agents/              project-specific subagents (jam-supervisor, jam-explorer, ...)
+agents/              project-specific subagents (my-supervisor, my-explorer, ...)
 state/               SESSION.md + PLAN.md + checkpoints + summaries
 vault/               decisions/ + research/ + architecture/ — dated project memory
 ```

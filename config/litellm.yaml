@@ -19,7 +19,7 @@ model_list:
     custom_llm_provider: openai
 - model_name: explore
   litellm_params:
-    model: openai/qwen3:4b
+    model: openai/qwen2.5-coder:7b
     api_base: http://localhost:11434/v1
     api_key: ollama
     custom_llm_provider: openai

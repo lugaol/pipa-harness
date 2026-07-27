@@ -1,8 +1,8 @@
 # PLAN (intra-session ledger — max 1 item in_progress)
 
 ## Goal hierarchy
-- Epic: Jam Instrument harness modernization
-  - Feature: pipa refactor + multiagent verification (specs/<feature>/)
+- Epic: pipa harness baseline
+  - Feature: harness refactor + multiagent verification (specs/<feature>/)
     - Story: extension wiring → achieved
     - Story: graphify MCP fix → achieved
     - Story: LiteLLM gateway → achieved
@@ -17,7 +17,7 @@
 - (none)
 
 ## Completed loops (this session)
-- Story: multiagent routing — @jam-supervisor → @jam-explorer subagent → PASS
+- Story: multiagent routing — supervisor → explorer subagent → PASS
 
 ## Checkpoints
 - Last checkpoint: `2026-07-25T00:00:00Z` — multiagent-routing achieved
