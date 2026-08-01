@@ -1,28 +1,28 @@
 model_list:
 - model_name: primary
   litellm_params:
-    model: kwaipilot/kat-coder-pro-v2.5:free
+    model: kilo-auto/free
+    custom_llm_provider: openai
     api_base: https://api.kilo.ai/api/gateway
     api_key: os.environ/KILO_API_KEY
-    custom_llm_provider: openai
 - model_name: fast
   litellm_params:
     model: stepfun/step-3.7-flash:free
+    custom_llm_provider: openai
     api_base: https://api.kilo.ai/api/gateway
     api_key: os.environ/KILO_API_KEY
-    custom_llm_provider: openai
 - model_name: deep
   litellm_params:
     model: openai/kimi-k2.7-code
+    custom_llm_provider: openai
     api_base: https://api.moonshot.cn/v1
     api_key: os.environ/KIMI_API_KEY
-    custom_llm_provider: openai
 - model_name: explore
   litellm_params:
     model: stepfun/step-3.7-flash:free
+    custom_llm_provider: openai
     api_base: https://api.kilo.ai/api/gateway
     api_key: os.environ/KILO_API_KEY
-    custom_llm_provider: openai
 - model_name: kilo-free
   litellm_params:
     model: kilo-auto/free

@@ -403,6 +403,22 @@ def read_env_file() -> dict:
 def _mask(v: str) -> str:
     return f"{v[:4]}…{v[-4:]}" if len(v) > 8 else "•••"
 
+def _persist_api_key(alias: str, raw_key: str) -> str:
+    safe_name = re.sub(r"[^A-Z0-9_]", "_", alias.upper())
+    env_var = f"PIPA_API_KEY_{safe_name}"
+    lines = ENV_FILE.read_text().splitlines() if ENV_FILE.exists() else []
+    out, done = [], False
+    for line in lines:
+        if line.startswith(f"{env_var}="):
+            out.append(f"{env_var}={raw_key}")
+            done = True
+        else:
+            out.append(line)
+    if not done:
+        out.append(f"{env_var}={raw_key}")
+    ENV_FILE.write_text("\n".join(out) + "\n")
+    return f"os.environ/{env_var}"
+
 @app.get("/api/env-keys")
 def api_get_env_keys():
     values = read_env_file()
@@ -449,6 +465,8 @@ def api_restart_gateway():
         return JSONResponse({"ok": False, "detail": "litellm binary not found on PATH"})
     env = dict(os.environ)
     env.update({k: v for k, v in read_env_file().items() if v})
+    if "KILO_API_KEY" in env:
+        env["OPENAI_API_KEY"] = env["KILO_API_KEY"]
     STATE.mkdir(exist_ok=True)
     log = open(STATE / "litellm.log", "a")
     log.write("\n[restart from dashboard]\n")
@@ -535,6 +553,8 @@ def api_set_model(alias: str, payload: dict):
             if api_base:
                 entry["litellm_params"]["api_base"] = api_base
             if api_key:
+                if not api_key.startswith("os.environ/"):
+                    api_key = _persist_api_key(alias, api_key)
                 entry["litellm_params"]["api_key"] = api_key
             if custom_llm_provider:
                 entry["litellm_params"]["custom_llm_provider"] = custom_llm_provider
@@ -563,7 +583,7 @@ def api_set_model(alias: str, payload: dict):
 @app.post("/api/models/{alias}/reset")
 def api_reset_model(alias: str):
     defaults = {
-        "primary": {"model": "kwaipilot/kat-coder-pro-v2.5:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
+        "primary": {"model": "kilo-auto/free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
         "fast": {"model": "stepfun/step-3.7-flash:free", "api_base": "https://api.kilo.ai/api/gateway", "api_key": "os.environ/KILO_API_KEY", "custom_llm_provider": "openai"},
         "deep": {"model": "openai/kimi-k2.7-code", "api_base": "https://api.moonshot.cn/v1", "api_key": "os.environ/KIMI_API_KEY"},
         "explore": {"model": "openai/qwen2.5-coder:7b", "api_base": "http://localhost:11434/v1", "api_key": "ollama", "custom_llm_provider": "openai"},

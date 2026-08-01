@@ -1,18 +1,32 @@
 #!/usr/bin/env python3
 """
 Query the structured memory store.
+
+Usage:
+  # Query the base harness memory
+  python tools/memory_store/query.py "blow detection"
+
+  # Query a project extension memory
+  python tools/memory_store/query.py --project /path/to/project "blow detection"
 """
+import argparse
 import sqlite3
-import sys
 from pathlib import Path
+from typing import Optional
 
-DB_PATH = Path(__file__).parent.parent.parent / "state" / "memory.db"
 
-def query_memory(query_text, scope=None, limit=5):
-    if not DB_PATH.exists():
-        print("Memory DB not found. Run index_vault.py first.")
+def _db_path(project_root: Optional[Path]) -> Path:
+    if project_root:
+        return project_root / ".harness_extension" / "state" / "memory.db"
+    return Path(__file__).parent.parent.parent / "state" / "memory.db"
+
+
+def query_memory(query_text, project_root: Optional[Path] = None, scope=None, limit=5):
+    db_path = _db_path(project_root)
+    if not db_path.exists():
+        print(f"Memory DB not found: {db_path}. Run index_vault.py first.")
         return
-    conn = sqlite3.connect(DB_PATH)
+    conn = sqlite3.connect(db_path)
     sql = "SELECT path, title, scope, as_of, valid_until, status FROM memories WHERE status='active'"
     params = []
     if scope:
@@ -22,8 +36,17 @@ def query_memory(query_text, scope=None, limit=5):
     params.append(limit)
     rows = conn.execute(sql, params).fetchall()
     conn.close()
+    if not rows:
+        print("No matching memories found.")
     for row in rows:
         print(f"- {row[1]} ({row[2]}) — {row[0]} [as_of={row[3]}, valid_until={row[4]}]")
 
+
 if __name__ == "__main__":
-    query_memory(sys.argv[1] if len(sys.argv) > 1 else "")
+    parser = argparse.ArgumentParser(description="Query the pipa harness memory store")
+    parser.add_argument("query", nargs="?", default="", help="Query text")
+    parser.add_argument("--project", type=Path, help="Project root whose extension vault to query")
+    parser.add_argument("--scope", help="Filter by scope (decision, research, architecture, analysis)")
+    parser.add_argument("--limit", type=int, default=5, help="Maximum results")
+    args = parser.parse_args()
+    query_memory(args.query, args.project, args.scope, args.limit)
