@@ -2,7 +2,7 @@
 # bootstrap.sh — one-command installer for pipa_harness.
 #
 # curl|sh friendly:
-#   curl -fsSL https://raw.githubusercontent.com/OWNER/pipa_harness/main/bootstrap.sh | sh
+#   curl -fsSL https://raw.githubusercontent.com/lugaol/pipa-harness/main/bootstrap.sh | sh
 #
 # What it does:
 #   1. clone pipa_harness into ~/.pipa-harness (or update an existing checkout)
@@ -15,7 +15,7 @@
 #   PIPA_HOME    install location    (default: ~/.pipa-harness)
 set -eu
 
-REPO_URL="${REPO_URL:-https://github.com/OWNER/pipa_harness.git}"
+REPO_URL="${REPO_URL:-https://github.com/lugaol/pipa-harness.git}"
 PIPA_BRANCH="${PIPA_BRANCH:-main}"
 DEST="${PIPA_HOME:-$HOME/.pipa-harness}"
 
