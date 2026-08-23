@@ -17,7 +17,9 @@ from typing import Optional
 
 def _db_path(project_root: Optional[Path]) -> Path:
     if project_root:
-        return project_root / ".harness_extension" / "state" / "memory.db"
+        pipa_state = project_root / ".pipa" / "state" / "memory.db"
+        legacy = project_root / ".harness_extension" / "state" / "memory.db"
+        return pipa_state if pipa_state.exists() or not legacy.exists() else legacy
     return Path(__file__).parent.parent.parent / "state" / "memory.db"
 
 

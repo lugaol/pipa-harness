@@ -1,0 +1,82 @@
+name: install-check
+
+# Fresh-machine verification: an ubuntu-latest runner IS a disposable clean
+# machine. Exercises the real install path (bootstrap.sh clone → wire → thin
+# project init) plus the conformance suite. Replaces the retired docker/ setup.
+
+on:
+  pull_request:
+    paths:
+      - "bootstrap.sh"
+      - "install.sh"
+      - "install/**"
+      - "bin/pipa"
+      - "pipa/**"
+      - "clis/**"
+      - "models/**"
+      - "mcp/**"
+      - "templates/**"
+      - "tests/**"
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  bootstrap-and-wire:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Syntax-check install scripts
+        run: bash -n bootstrap.sh install.sh install/steps/*.sh
+
+      - name: Bootstrap from the local checkout (offline clone path)
+        env:
+          # git clone accepts a local path — exercises bootstrap's full
+          # clone-or-update flow without needing a published remote.
+          REPO_URL: ${{ github.workspace }}
+          PIPA_BRANCH: ${{ github.ref_name }}
+        run: bash bootstrap.sh
+
+      - name: Install core components
+        run: |
+          export PATH="$HOME/.pipa-harness/bin:$PATH"
+          pipa install uv litellm graphify
+
+      - name: Wire globals (dsh for the project runtime)
+        run: |
+          export PATH="$HOME/.pipa-harness/bin:$PATH"
+          pipa install dsh opencode
+
+      - name: Thin-project smoke (init in a fresh repo)
+        run: |
+          export PATH="$HOME/.pipa-harness/bin:$PATH"
+          proj="$RUNNER_TEMP/smoke-proj"
+          git init -q "$proj" && cd "$proj"
+          pipa init --runtime deepseek-harness
+          for f in AGENTS.md .pipa/runtime .pipa/AGENTS.md .pipa/rules .pipa/memory .pipa/state; do
+            test -e "$f" || { echo "missing after init: $f"; exit 1; }
+          done
+          # thin projects must NOT carry runtime configs or legacy extension dir
+          test ! -e .pipa/extension
+          test ! -e .pipa/deepseek-harness
+          test ! -e .pipa/opencode
+          # dsh globals wired for the selected runtime...
+          grep -q pipa "$HOME/.dsh/cordis.patch.yml"
+          # ...and switching runtimes wires the other side globally too
+          pipa runtime set opencode
+          grep -q pipa "$HOME/.config/opencode/opencode.jsonc"
+          pipa status
+
+  tests:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+      - name: Conformance + unit suite
+        run: |
+          uv run --with pytest --with pyyaml \
+            --with fastapi --with uvicorn --with jinja2 --with httpx \
+            python -m pytest tests/ -q

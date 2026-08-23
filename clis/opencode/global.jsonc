@@ -1,0 +1,65 @@
+{
+  "$schema": "https://opencode.ai/config.json",
+  "model": "litellm/primary",
+  "small_model": "litellm/fast",
+
+  "provider": {
+    "litellm": {
+      "npm": "@ai-sdk/openai-compatible",
+      "name": "LiteLLM",
+      "options": {
+        "baseURL": "http://localhost:4000/v1",
+        "apiKey": "sk-pipa-local"
+      },
+      "models": {
+        "primary": {},
+        "fast": {},
+        "deep": {},
+        "explore": {},
+        "kilo-free": {},
+        "kimi-code": {},
+        "or-nemotron-ultra": {},
+        "or-nemotron-super": {},
+        "or-gemma-31b": {},
+        "or-north-code": {}
+      }
+    }
+  },
+
+  // Contract surface: global tier from the install + per-project overlay.
+  // OpenCode reads <cwd>/AGENTS.md automatically; rules load from both tiers.
+  // "@PIPA_ROOT@" prefixes are substituted at render time (pipa.runtime).
+  "instructions": [
+    "@PIPA_ROOT@/AGENTS.md",
+    "@PIPA_ROOT@/rules/*.md",
+    ".pipa/rules/*.md"
+  ],
+
+  "permission": {
+    "bash": {
+      "*": "ask",
+      "ls *": "allow",
+      "cat *": "allow",
+      "head *": "allow",
+      "tail *": "allow",
+      "wc *": "allow",
+      "grep *": "allow",
+      "rg *": "allow",
+      "find *": "allow",
+      "git status*": "allow",
+      "git diff*": "allow",
+      "git log*": "allow",
+      "git branch*": "allow",
+      "graphify *": "allow"
+    },
+    "graphify_*": "allow",
+    "skill": { "*": "allow" }
+  },
+
+  // "mcp" is injected at render time from the mcp/<name>/config.json registry,
+  // together with "<name>_*": allow permission entries.
+
+  "subagent_depth": 2,
+  "compaction": { "auto": true, "prune": false, "reserved": 10000 },
+  "watcher": { "ignore": ["node_modules/**", "dist/**", "build/**", ".git/**", "graphify-out/**"] }
+}

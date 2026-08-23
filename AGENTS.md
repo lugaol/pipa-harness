@@ -1,17 +1,29 @@
 # AGENTS.md — pipa_harness
 <meta awareness="high">
-A project-agnostic agent harness: OpenCode + LiteLLM + graphify + Obsidian.
-This file is the always-loaded router. Everything else loads on demand.
+A project-agnostic, runtime-agnostic agent harness: LiteLLM + graphify +
+Obsidian, wired into OpenCode or DeepSeek Harness. This file is the
+always-loaded router. Everything else loads on demand.
 
 ## Philosophy
 CLI First → Observability Second → UI Third. Two-phase workflow (plan → build).
 File-driven context passing (`specs/` → stories). Lean by default.
 
 ## Stack
-- **OpenCode** — TUI + headless agent runner
-- **LiteLLM** — model gateway `:4000`; aliases in `config/litellm.yaml`
+- **Runtimes** — OpenCode or DeepSeek Harness (agent runner; see `clis/`)
+- **pipa CLI** — `bin/pipa` (Python, `pipa/` package): init, up, stop, status, runtime, migrate, hook, eval
+- **LiteLLM** — model gateway `:4000`; aliases in `models/{local,cloud}/*.yaml` fragments composed into `models/.effective.yaml` (shared by all runtimes)
 - **graphify** — persistent codebase graph; query BEFORE grep
 - **Obsidian** — vault memory in `vault/`
+
+## Runtimes
+The harness is runtime-agnostic: AGENTS.md, rules/, skills/, agents/ are pure
+markdown consumed by any runtime. Per-project selection lives in
+`.pipa/runtime` (`opencode` | `deepseek-harness`).
+- `pipa runtime list|show|set <name>` — inspect/switch runtimes
+- CLI config templates: `clis/<name>/` (opencode global.jsonc / dsh cordis.patch.yml); wiring is machine-global (~/.config/opencode, ~/.dsh)
+- Both runtimes share the LiteLLM gateway and the NDJSON session log at
+  `.pipa/state/session.log.ndjson` (OpenCode via `pipa hook`; dsh sessions
+  live separately under `~/.dsh/sessions/`).
 
 ## Golden rules
 - [HARD] Never commit/push unless asked.
@@ -69,7 +81,8 @@ Utility: `@explorer` `@researcher`
 Definitions in `agents/*.md`. Invoke with `@name` in OpenCode.
 
 ## Project extensions
-`.harness_extension/` carries project-specific rules/skills/agents.
+`.pipa/extension/` carries project-specific rules/skills/agents (scaffolded by
+`pipa init`; legacy `.harness_extension/` projects migrate with `pipa migrate`).
 Conflict priority: extension > base.
 
 ## Knowledge graph
@@ -98,6 +111,10 @@ Fallback to grep, no error.
 
 **Rule:** Never inject passive memory wholesale. Check `as_of`/`valid_until`; expired → flag, don't apply.
 
+**One-query access:** `pipa recall "<query>"` fans out over the vault,
+memory.db and the code graph with expiry-aware ranking — prefer it over
+manual greps when hunting prior decisions.
+
 ## Memory store (structured recall)
 - **Index:** `tools/memory_store/index_vault.py` — indexes `vault/*.md` into `state/memory.db`.
 - **Query:** `tools/memory_store/query.py "<query>"` — returns matching notes with scope, dates, status.
@@ -115,7 +132,7 @@ All calls go through LiteLLM aliases — never call providers directly.
 | `primary` | Implementation, dev agent, supervisor | Medium-High |
 | `deep` | Research, planning, architect | High |
 | `explore` | Read-only codebase Q&A | Lowest |
-Scripts: `bin/litellm-task.sh <alias> "<prompt>"`.
+Scripts: `tools/litellm/task.sh <alias> "<prompt>"`.
 
 ### Token-saving rules
 - Delegate search to `@explorer` instead of reading files.
@@ -134,6 +151,15 @@ Scripts: `bin/litellm-task.sh <alias> "<prompt>"`.
 - One tool round solves it → stop.
 - 3 search rounds without progress → ask the user.
 - "Done" = green build + tests pass, never "looks good".
+
+## Truth & spend planes
+- **Session bus:** every runtime appends to `<project>/.pipa/state/session.log.ndjson`
+  (canonical contract: `docs/SESSION_BUS.md`, enforced by `tests/test_hooks_schema.py`).
+- **Flight recorder:** `pipa replay [SID]` · `pipa diff A B` — cross-runtime replay/compare.
+- **Spend ledger:** the LiteLLM gateway logs metadata-only usage rows to
+  `state/spend.ndjson`; inspect with `pipa spend [--since TS] [--json]`.
+- **Conformance:** `tests/test_conformance_*.py` pin runtime config contracts
+  (gateway aliases, dsh patch schema, opencode jsonc) — run before changing clis/, models/ or mcp/.
 
 ## Concurrent execution
 Run independent tasks in parallel via `task` tool with unique `task_id`s.
@@ -184,13 +210,23 @@ Rule: keep exactly one `in_progress` while work remains.
 - **Enable:** Set `PIPA_TRACING=1` in env. Use `tools/tracing.py start|end|export`.
 - **Why:** Enables debugging latency, token usage, and failure modes without manual log inspection.
 
-## Observability (optional, opt-in)
-- **Traces:** Each agent run can emit a trace span: agent name, model alias, token count, latency, tools called. Stored in SQLite (`state/traces.db`) or exported to OTel collector.
-- **Enable:** Set `PIPA_TRACING=1` in env. Use `tools/tracing.py start|end|export`.
-- **Why:** Enables debugging latency, token usage, and failure modes without manual log inspection.
-
 ## Repo layout
-`AGENTS.md` (router) · `rules/` (path-scoped) · `skills/` (trigger-loaded) ·
-`agents/` (subagents) · `specs/` (plan→story) · `bin/` (wrappers) ·
-`config/` (LiteLLM + OpenCode) · `vault/` (memory) · `state/` (session) ·
-`graphify-out/` (gitignored) · `.opencode/` (gitignored)
+`AGENTS.md` (router) · `pipa/` (Python CLI + core lib) · `clis/` (per-runtime
+config + templates: opencode, deepseek-harness) · `rules/` (path-scoped) ·
+`skills/` (trigger-loaded) · `agents/` (subagents) · `specs/` (plan→story) ·
+`bin/pipa` (entrypoint) · `models/` (LiteLLM fragments + settings, composed
+to `.effective.yaml`) · `mcp/` (integration registry, one folder per server)
+· `dashboard/` (modular pages+fragments UI) · `install/` (Makefile + steps)
+· `tools/` (evals, litellm, memory_store, ollama) · `vault/` (memory) ·
+`state/` (session, ledger, registry; gitignored) · `graphify-out/` (gitignored)
+
+Per-project layout (created by `pipa init`, thin overlay only):
+`.pipa/runtime` (selected runtime) · `.pipa/AGENTS.md` (project facts,
+symlinked from root) · `.pipa/rules/` · `.pipa/memory/` · `.pipa/skills/`
+(optional, overrides global) · `.pipa/state/` — runtime configs are
+machine-global and never live in projects.
+
+Per-project layout (created by `pipa init`):
+`.pipa/runtime` (selected runtime) · `.pipa/extension/` (project rules/skills/
+agents) · `.pipa/state/` (session log, traces, memory.db) · `.pipa/<runtime>/`
+(generated runtime config, gitignored) · `AGENTS.md` → `.pipa/extension/AGENTS.md`

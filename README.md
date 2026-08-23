@@ -2,240 +2,183 @@
 
 ![pipa kite illustration](assets/pipa-sky.svg)
 
-**A project-agnostic agent harness for AI coding assistants** — OpenCode + LiteLLM + graphify + Obsidian, orchestrated with emdash.
+**A project-agnostic, runtime-agnostic agent harness, installed once and shared by every project.**
+LiteLLM + graphify + Obsidian behind a thin `pipa` CLI; projects carry only a thin `.pipa/` overlay of markdown facts — no runtime configs, ever.
 
-<p align="center">
-  <a href="https://github.com/lugaol/pipa-harness/actions"><img alt="CI" src="https://github.com/lugaol/pipa-harness/actions/workflows/ci.yml/badge.svg"/></a>
-  <a href="https://pypi.org/project/pipa-harness/"><img alt="PyPI" src="https://img.shields.io/pypi/v/pipa-harness.svg"/></a>
-  <a href="https://github.com/lugaol/pipa-harness/blob/main/LICENSE"><img alt="License" src="https://img.shields.io/badge/License-Apache_2.0-blue.svg"/></a>
-  <a href="https://github.com/lugaol/pipa-harness/issues"><img alt="Issues" src="https://img.shields.io/github/issues/lugaol/pipa-harness.svg"/></a>
-</p>
+## Why
 
----
-
-## What it does
-
-AI agents work best with *just enough* context. This harness keeps the always-loaded context tiny (one `AGENTS.md` router) and loads everything else on demand:
-- **Rules** attach by file path glob
-- **Skills** load by trigger keyword
-- **Memory** is queried, not injected wholesale
-- **Models** route through a single LiteLLM gateway you control
-
-Result: lower token costs, less context bloat, and zero conversation loss across sessions.
-
-## Why developers choose it
-
-| Feature | Benefit |
-|---------|---------|
-| **Token-efficient** | Only `AGENTS.md` is always loaded; everything else is progressive disclosure. |
-| **Model-agnostic** | One `config/litellm.yaml` holds every alias. Swap providers in one place. |
-| **Two-phase workflow** | Planning agents produce a spec, scrum master turns it into self-contained story files, build agents consume them. No context loss. |
-| **Extensible** | Layer project-specific rules/skills/agents with `.harness_extension/`. |
-| **Lean** | Markdown files + subagents + git. No frameworks, no engines. |
-| **Observable** | Built-in tracing, evals, checkpoints, and a live dashboard. |
-
-## Current status
-
-- **Stable** — used in production for Android audio app development
-- **Active development** — see [vault/research/agent-framework-sota-2026.md](vault/research/agent-framework-sota-2026.md) for latest SOTA patterns adopted
-- **Compatible** — works with OpenCode, LiteLLM, graphify, Obsidian, emdash
-- **Tested** — agent behavioral evals pass (transparency, approval gates, golden rules)
+- **Free-tier-native** — runs at $0: local Ollama models are the always-on fallback tier; cloud providers activate only when their API key is present.
+- **Runtime-agnostic** — OpenCode or DeepSeek Harness per project (`pipa runtime set`); both share one session bus, one model gateway, one memory.
+- **Flight recorder** — every runtime appends to one NDJSON log; replay any session or diff two sessions (same task, two models) with `pipa replay` / `pipa diff`.
+- **Agent CI** — a GitHub Action gates PRs on agent evals, so editing agent markdown can't silently drop approval gates or golden rules.
+- **One-query memory** — `pipa recall "why did we choose X"` fans out over project memory, the install vault, and the code graph with expiry-aware ranking.
 
 ## Quick start
 
-### One-command install (from a clean machine)
-
 ```bash
+# Option A: one command (clean machine)
 curl -fsSL https://raw.githubusercontent.com/lugaol/pipa-harness/main/bootstrap.sh | bash
+
+# Option B: clone + install
+git clone https://github.com/lugaol/pipa-harness.git && cd pipa-harness
+make -C install                   # rsync working tree -> ~/.pipa-harness
+make -C ~/.pipa-harness/install path   # put pipa on $PATH (idempotent)
+
+# Wire tools + services (litellm :4000, ollama, dashboard :8080)
+pipa up
+
+# Adopt any project
+cd /path/to/your-project
+pipa init                          # thin .pipa/ overlay, idempotent
+
+# Run an agent runtime in that project
+opencode                           # OpenCode TUI
+dsh web                            # DeepSeek Harness Web UI
 ```
 
-This downloads the harness to `~/.local/share/pipa-harness`, adds it to your shell `PATH`, installs dependencies (`uv`, `ollama`, `litellm`, `graphify`, `opencode`, `obsidian`, `emdash`), and starts services. If API keys are not set, it falls back to a free-only Ollama-based config so you can start immediately.
-
-### Or install from a local clone
-
-```bash
-# Clone the harness
-git clone https://github.com/lugaol/pipa-harness.git
-cd pipa-harness
-
-# Install dependencies (macOS + Linux)
-./bin/pipa-up.sh
-```
-
-### Run OpenCode
-
-```bash
-opencode
-```
-
-OpenCode reads `AGENTS.md` automatically. You're ready to go.
-
-### Open the dashboard
-
-```bash
-# In another terminal
-bin/dashboard.sh start
-# Opens http://localhost:8080
-```
-
-![Dashboard](assets/dashboard-screenshot.png)
+Update later with `make -C ~/.pipa-harness update` (git pull --ff-only).
 
 ## Adopt in your project
 
-### One-command setup
+`pipa init` creates a thin overlay. It never touches global wiring and never overwrites existing files:
+
+```
+.pipa/
+  AGENTS.md        project facts only (loaded alongside the global router)
+  runtime          selected runtime name: opencode | deepseek-harness
+  rules/*.md       project rules — load together with global rules
+  skills/          optional project skills — same name beats the global skill
+  memory/
+    decisions/     dated decisions (as_of / valid_until)
+    research/      external findings
+  state/           session.log.ndjson, traces.db, memory.db (gitignored)
+AGENTS.md -> .pipa/AGENTS.md   (symlink created by pipa init)
+```
+
+Legacy layout? Run `pipa migrate` to fold `.harness_extension/` into `.pipa/`.
+
+### Global vs project
+
+| Concern | Global install (~/.pipa-harness) | Project (.pipa/) |
+|---------|----------------------------------|------------------|
+| Router | `AGENTS.md` always loaded | project-facts `AGENTS.md`, loaded alongside |
+| Rules | `rules/*.md` | `.pipa/rules/*.md` (both apply) |
+| Skills | `skills/*/SKILL.md` | `.pipa/skills/` wins on same name |
+| Memory | `vault/` | `.pipa/memory/` searched first |
+| Models | `models/` fragments + gateway | nothing |
+| Runtime config | wired machine-global | nothing — never stored in projects |
+
+## CLI reference
 
 ```bash
-cd /path/to/your-project
-pipa-up
+pipa init [--runtime R]        # scaffold .pipa/ in the current project
+pipa up [--no-apps|--no-pull]  # install deps, start services, wire configs
+pipa stop                      # stop services started by pipa
+pipa status [--json]           # health check (exit 1 on failure)
+pipa runtime list|show|set R   # inspect / switch the project runtime
+pipa migrate                   # legacy .harness_extension/ -> .pipa/
+pipa hook <event> [args...]    # append to the NDJSON session bus
+pipa replay [SID]              # flight recorder: replay a recorded session
+pipa diff A B                  # compare two sessions (same task, two models)
+pipa recall "<query>"          # one query over project memory + vault + code graph
+pipa spend [--since TS] [--json]  # token/cost ledger (metadata-only NDJSON)
+pipa eval                      # run agent behavioral evals
+pipa install <component>       # uv|ollama|litellm|graphify|dsh|opencode|apps
 ```
 
-Idempotent: creates `.harness_extension/`, `.opencode/`, symlinks root `AGENTS.md`, and auto-fills `AGENTS.md` placeholders from detected project facts. Never overwrites existing files.
+## Models & keys
 
-### Pick a project-type template
+Model config is composed from fragments at wire time — never edited by hand:
 
-```bash
-cd /path/to/your-android-project
-pipa-up --init android
-```
+- `models/local/ollama.yaml` — always-on fallback tier ($0 mode works out of the box)
+- `models/cloud/*.yaml` — included only when their `requires:` env key is set; fragments override aliases upward, so cloud tiers upgrade local roles transparently
+- `models/settings.yaml` — shared gateway settings (spend ledger callback lives here)
+- Composer output: `models/.effective.yaml` (generated, gitignored), consumed by the LiteLLM proxy
 
-Available templates live in `templates/project/`. Each overlays domain-specific rules, skills, and routing on top of the generic scaffold. You can add new templates by copying `templates/project/generic/`.
+| Alias | Use for |
+|-------|---------|
+| `fast` | triage, QA verdicts, summaries |
+| `primary` | implementation, dev agent |
+| `deep` | research, planning, architecture |
+| `explore` | read-only codebase Q&A |
 
-### Or use the wrapper
+Cloud keys: `KILO_API_KEY` (primary/fast/explore), `KIMI_API_KEY` (deep), `OPENROUTER_API_KEY` (free-tier OpenRouter models). No keys? You are still fully functional on Ollama.
 
-```bash
-# From any project after pipa-up
-pipa-up            # scaffold + wire
-pipa-up --status   # report only
-pipa-up --stop     # stop services
-pipa-up --init android   # scaffold with the Android template
-```
+## MCP registry
 
-## Layout
+One folder per integration: `mcp/<name>/config.json`. Enabled entries merge into the rendered runtime config at wire time; adding an integration means dropping a folder — nothing else changes.
 
-```
-bootstrap.sh         one-command installer (curl | bash)
-AGENTS.md            always-loaded router (the only injected context)
-rules/               path-scoped rules (git, testing, security, code-review)
-skills/              trigger-loaded skills (debugging, release, performance, ...)
-agents/              subagents: analyst → pm → architect → sm → dev → qa, explorer, researcher
-specs/               two-phase plan→story workflow output
-bin/                 litellm-task.sh, pipa-up.sh, dashboard.sh, pipa-init-project.py, pipa-extension-check.sh
-config/              litellm.yaml + litellm.free.yaml — every model alias lives here
-tools/               dashboard (FastAPI, :8080), tracing, evals, memory store
-templates/           .harness_extension/ scaffold + .opencode/ + project-type templates + emdash scripts
-vault/               dated memory (decisions, research) with as_of/valid_until
-state/               SESSION.md (warm resume) + PLAN.md (task ledger)
-```
+- `context7/` — enabled by default
+- `bitbucket/`, `jira/`, `figma/` — disabled placeholders awaiting credentials (env vars, never git)
 
-## Project extension layout (`.harness_extension/`)
-
-```
-AGENTS.md            project-specific router (symlinked from root)
-rules/               project-scoped rules (audio-ndk, ui-xml, ...)
-skills/              project-specific skills (blow-detection, gesture-mapping, ...)
-agents/              project-specific subagents (my-supervisor, my-explorer, ...)
-state/               SESSION.md + PLAN.md + checkpoints + summaries
-vault/               decisions/ + research/ + architecture/ — dated project memory
-```
-
-## Workflow
-
-```
-PLAN   @analyst → @pm → @architect → specs/<feature>/*.md
-BUILD  @sm → specs/<feature>/stories/*.md → @dev implements → @qa verifies
-```
-
-Each story file is self-contained — the dev agent reads one file and has everything. Trivial task? Skip planning, go straight to `@dev`.
-
-## Model orchestration
-
-All calls go through LiteLLM aliases:
-
-| Alias | Use for | Token cost |
-|-------|---------|------------|
-| `fast` | Triage, QA verdicts, summaries | Low |
-| `primary` | Implementation, dev agent, supervisor | Medium-High |
-| `deep` | Research, planning, architect | High |
-| `explore` | Read-only codebase Q&A | Lowest |
-
-Script: `bin/litellm-task.sh <alias> "<prompt>"`. Override via env: `LITELLM_MODEL_FAST`, `LITELLM_MODEL_PRIMARY`, etc.
+See [mcp/README.md](mcp/README.md) for the schema.
 
 ## Dashboard
 
-After `pipa-up.sh`, the dashboard opens at `http://localhost:8080`:
+Starts with `pipa up` at `http://localhost:8080`. Modular FastAPI pages:
 
-- **Status** — litellm, ollama, opencode, graphify, emdash health
-- **LLMs** — manage model aliases with presets; changes write to `config/litellm.yaml`
-- **API Keys** — manage `.env` keys from the UI
-- **Agents** — every base + extension agent, with per-agent model override
-- **Extensions** — `.harness_extension/` projects under your development root
-- **Tools** — pipa_harness bin scripts + dashboard
-- **Traces** — agent run spans (enable with `PIPA_TRACING=1`)
-- **Evals** — behavioral regression checks for agents
-- **Checkpoints** — fault tolerance & resume points
-- **Summaries** — rolling conversation summaries
-- **Memory** — SQLite-backed vault index
+overview · sessions · spend · models · agents · projects · memory · evals
 
-Start/stop manually: `bin/dashboard.sh {start|stop|status}`
+![Dashboard](assets/dashboard-screenshot.png)
 
-## Usage examples
-
-### Run a specific agent
+## Flight recorder
 
 ```bash
-# Deep research (papers, API docs)
-bin/litellm-task.sh deep "Research Oboe latency best practices for Android audio"
-
-# Fast QA verdict
-bin/litellm-task.sh fast "Review this diff for security issues: ..."
-
-# Cheap codebase search
-bin/litellm-task.sh explore "Find all JNI method signatures in app/src/main/cpp"
+pipa replay                 # list recorded sessions across all runtimes
+pipa replay s3              # step through one session
+pipa diff s3 s7             # same task, two models — tool calls, tokens, cost side by side
 ```
 
-### Use with OpenCode
+The underlying contract is documented in [docs/SESSION_BUS.md](docs/SESSION_BUS.md).
 
-In OpenCode, just mention an agent by name:
+## Agent CI
+
+PRs touching `agents/**` run the behavioral eval suite before merge — transparency blocks, approval gates, golden rules all pinned as tests.
+
+```yaml
+- uses: lugaol/pipa-harness@main
+  with:
+    evals-path: tools/evals/run.py   # default
+    fail-on-error: "true"            # default
+```
+
+[![Agent Evals](https://github.com/lugaol/pipa-harness/actions/workflows/agent-evals.yml/badge.svg)](https://github.com/lugaol/pipa-harness/actions/workflows/agent-evals.yml)
+
+Details: [docs/AGENT_CI.md](docs/AGENT_CI.md). The action itself is [action.yml](action.yml).
+
+## Layout
+
+Install root (`~/.pipa-harness`) and this repo share one tree:
 
 ```
-@dev Implement the story in specs/feature/stories/01-core.md
+AGENTS.md            always-loaded router (the only injected context)
+rules/               path-scoped rules (git, testing, security, code-review)
+skills/              trigger-loaded skills (debugging, release, performance, ...)
+agents/              subagents: analyst -> pm -> architect -> sm -> dev -> qa, explorer, researcher
+clis/                per-runtime templates + wire entries: opencode/, deepseek-harness/
+models/              LiteLLM fragments: local/, cloud/, settings.yaml -> .effective.yaml (generated)
+mcp/                 MCP integration registry (<name>/config.json)
+tools/               evals/, litellm/, memory_store/, ollama/, tracing.py
+dashboard/           FastAPI app: pages/, fragments/, templates/ (:8080)
+pipa/                Python CLI lib: cli, config, runtime, scaffold, services, hooks, recall, spend
+install/             Makefile + steps/ (deps, core, runtimes, apps, wire)
+bin/                 pipa entrypoint
+bootstrap.sh         one-command installer (curl | bash)
+action.yml           Agent CI action (gates PRs on agent evals)
+tests/               conformance + behavior suite (pins every config contract)
+specs/               two-phase plan->story workflow output
+vault/               dated memory (decisions, research) with as_of/valid_until
+state/               SESSION.md (warm resume), PLAN.md (task ledger), spend ledger
+docs/                SESSION_BUS.md, AGENT_CI.md, ARCHITECTURE.md
 ```
 
-OpenCode reads the agent definition from `agents/*.md` and routes to the right model alias automatically.
+## Development
 
-### Enable tracing
+Run the test suite (pins config contracts: gateway fragments, runtime wiring, hooks schema, recall ranking, spend ledger):
 
 ```bash
-export PIPA_TRACING=1
-# Agent runs now emit trace spans to state/traces.db
-# View in dashboard or: python tools/tracing.py export
+uv run --with pytest --with pyyaml --with fastapi --with uvicorn --with jinja2 --with httpx python -m pytest tests/ -q
 ```
-
-### Run evals
-
-```bash
-python3 tools/agent_evals/run.py
-# Checks: transparency blocks, approval gates, golden rules, file:line refs
-```
-
-### Index vault memory
-
-```bash
-python3 tools/memory_store/index_vault.py
-# Indexes vault/*.md into state/memory.db for scoped recall
-python3 tools/memory_store/query.py "blow detection"
-```
-
-## Requirements
-
-- [OpenCode](https://opencode.ai) (`curl -fsSL https://opencode.ai/install | bash`)
-- [LiteLLM](https://docs.litellm.ai) (`uv tool install 'litellm[proxy]'`)
-- Optional: graphify, emdash, Obsidian
-
-## Migration
-
-- The legacy `pipa-extend.sh` + `squads/` extension model has been removed. Use `.harness_extension/` per project instead.
-- The old Ollama/Kilo wrappers (`harness/bin` → `~/harness/bin`) are retired. Use `pipa_harness/bin/litellm-task.sh` instead.
 
 ## License
 

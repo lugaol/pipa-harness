@@ -1,0 +1,57 @@
+{% extends "base.html" %}
+{% block title %}Models · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Models</h1>
+<p class="dim">{{ total }} alias(es) served by the gateway.</p>
+
+<section class="panel">
+  <h2>Local</h2>
+  {% if groups.local %}
+  <div class="chip-row">
+    {% for m in groups.local %}<span class="badge">{{ m }}</span>{% endfor %}
+  </div>
+  {% else %}{% with message='No local models listed.' %}{% include "empty_state.html" %}{% endwith %}{% endif %}
+</section>
+
+<section class="panel">
+  <h2>Cloud</h2>
+  {% if groups.cloud %}
+  <div class="chip-row">
+    {% for m in groups.cloud %}<span class="badge cloud">{{ m }}</span>{% endfor %}
+  </div>
+  {% else %}{% with message='No cloud models listed.' %}{% include "empty_state.html" %}{% endwith %}{% endif %}
+</section>
+
+<section class="panel">
+  <h2>Agent overrides</h2>
+  <p class="dim">Pin an agent to a gateway model. Empty value clears the override
+  (stored at <span class="mono">state/agent_llm_overrides.json</span>).</p>
+  {% if agent_rows %}
+    <datalist id="model-aliases">
+      {% for m in groups.local + groups.cloud %}<option value="{{ m }}"></option>{% endfor %}
+    </datalist>
+    <table>
+      <thead><tr><th>agent</th><th>frontmatter model</th><th>override</th><th>set</th></tr></thead>
+      <tbody>
+        {% for a in agent_rows %}
+        <tr>
+          <td>{{ a.name }}</td>
+          <td class="mono dim">{{ a.base_model or '—' }}</td>
+          <td class="mono">{{ a.override or '—' }}</td>
+          <td>
+            <form method="post" action="/api/overrides" class="inline-form">
+              <input type="hidden" name="agent" value="{{ a.name }}">
+              <input type="text" name="model" list="model-aliases"
+                     placeholder="gateway model alias" value="{{ a.override }}">
+              <button type="submit">Save</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+  {% else %}
+    {% with message='No agents discovered to override.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endif %}
+</section>
+{% endblock %}

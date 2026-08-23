@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Spend · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Spend</h1>
+
+<form method="get" action="/spend" class="filter-bar">
+  <label for="since">since (ISO ts)</label>
+  <input id="since" type="text" name="since" value="{{ since }}" placeholder="e.g. 2026-08-01">
+  <button type="submit">Filter</button>
+  {% if since %}<a href="/spend">clear</a>{% endif %}
+</form>
+
+<div class="cards">
+  {% for c in cards %}
+    {% with label=c.label, value=c.value, detail=c.detail %}{% include "stat_card.html" %}{% endwith %}
+  {% endfor %}
+</div>
+
+<section class="panel">
+  <h2>Totals</h2>
+  {% if window %}<p class="dim mono">{{ window }}</p>{% endif %}
+  {% with columns=by_model_columns, rows=by_model_rows, empty_message='No spend recorded in this window.' %}
+    {% include "table.html" %}
+  {% endwith %}
+</section>
+
+<section class="panel">
+  <h2>Recent calls <span class="dim">(last 50)</span></h2>
+  {% with columns=columns, rows=rows, empty_message='No ledger rows recorded yet.' %}
+    {% include "table.html" %}
+  {% endwith %}
+</section>
+{% endblock %}

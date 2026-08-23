@@ -1,0 +1,73 @@
+name: "pipa-agent-evals"
+description: >-
+  Gate PRs on agent behavioral evals. Runs tools/evals/run.py,
+  posts a file/check/pass summary to the job summary, and fails the
+  step when evals regress.
+
+branding:
+  icon: "git-branch"
+  color: "purple"
+
+inputs:
+  evals-path:
+    description: "Path to the eval runner script."
+    required: false
+    default: "tools/evals/run.py"
+  python-version:
+    description: "Python version used to run the evals."
+    required: false
+    default: "3.12"
+  fail-on-error:
+    description: "Fail the step when any eval reports a failure."
+    required: false
+    default: "true"
+
+runs:
+  using: "composite"
+  steps:
+    - name: Set up Python
+      uses: actions/setup-python@v5
+      with:
+        python-version: ${{ inputs.python-version }}
+
+    - name: Run agent evals
+      id: evals
+      shell: bash
+      env:
+        EVALS_PATH: ${{ inputs.evals-path }}
+        FAIL_ON_ERROR: ${{ inputs.fail-on-error }}
+      run: |
+        set -e
+        summary="${RUNNER_TEMP:-/tmp}/agent-evals-summary.json"
+        set +e
+        python "$EVALS_PATH" > "$summary"
+        status=$?
+        set -e
+
+        echo "## Agent evals" >> "$GITHUB_STEP_SUMMARY"
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+        echo "| file | check | pass |" >> "$GITHUB_STEP_SUMMARY"
+        echo "|------|-------|------|" >> "$GITHUB_STEP_SUMMARY"
+        python - <<'PY' >> "$GITHUB_STEP_SUMMARY"
+        import json
+        import os
+
+        path = os.path.join(os.environ.get("RUNNER_TEMP", "/tmp"), "agent-evals-summary.json")
+        data = json.load(open(path))
+        for r in data.get("results", []):
+            for key, val in r.items():
+                if key == "file":
+                    continue
+                ok = val.get("pass") if isinstance(val, dict) else bool(val)
+                mark = ":white_check_mark:" if ok else ":x:"
+                print(f"| `{r['file']}` | {key} | {mark} |")
+        total = data.get("total", "?")
+        failed = data.get("failed", "?")
+        print(f"| **{failed} failed / {total} agents** | | |")
+        PY
+        echo "" >> "$GITHUB_STEP_SUMMARY"
+
+        if [ "$status" -ne 0 ] && [ "$FAIL_ON_ERROR" = "true" ]; then
+          echo "::error::Agent evals failed ($status). See the job summary for details."
+          exit "$status"
+        fi

@@ -1,0 +1,5 @@
+{
+  "name": "bitbucket",
+  "enabled": false,
+  "mcp": { "type": "local", "command": "npx", "args": ["-y", "@bitbucket/mcp-server"], "env_note": "set BITBUCKET_TOKEN in ~/.pipa-harness/.env" }
+}

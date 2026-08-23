@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+{% block title %}Agents · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Agents</h1>
+<p class="dim">Discovered from harness agents/ plus registered projects' extension agent dirs.</p>
+
+{% if agents %}
+<div class="cards">
+  {% for a in agents %}
+  <div class="card agent-card">
+    <div class="stat-label">{{ a.name }} <span class="dim">· {{ a.source }}</span></div>
+    {% if a.description %}<p class="agent-desc">{{ a.description }}</p>{% endif %}
+    <div class="chip-row">
+      {% if a.mode %}<span class="badge">{{ a.mode }}</span>{% endif %}
+      {% if a.model %}<span class="badge cloud mono">{{ a.model }}</span>{% endif %}
+      {% if a.permission %}<span class="badge dim-badge">{{ a.permission }}</span>{% endif %}
+    </div>
+  </div>
+  {% endfor %}
+</div>
+{% else %}
+  {% with message='No agent definitions discovered.' %}{% include "empty_state.html" %}{% endwith %}
+{% endif %}
+{% endblock %}

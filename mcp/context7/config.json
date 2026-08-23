@@ -1,0 +1,9 @@
+{
+  "name": "context7",
+  "enabled": true,
+  "mcp": {
+    "type": "remote",
+    "url": "https://mcp.context7.com/mcp",
+    "timeout": 30000
+  }
+}

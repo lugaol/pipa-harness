@@ -2,10 +2,10 @@
 
 {{PROJECT_DESCRIPTION}}
 
-This `.harness_extension/` directory carries only project-specific context.
-The base rules, skills, agents, and workflow come from the globally installed
-pipa_harness (`~/.config/opencode` points at it). Edit this file with your
-project's facts; delete what you don't need.
+This `.pipa/extension/` directory carries only project-specific context.
+The base rules, skills, agents, and workflow come from the shared pipa_harness
+install (wired into your runtime by `pipa init` / `pipa up`). Edit this file
+with your project's facts; delete what you don't need.
 
 ## Golden rules
 - [HARD] Never commit or push unless the user explicitly asks.

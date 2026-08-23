@@ -1,54 +1,72 @@
-#!/bin/bash
-# bootstrap.sh — one-command install for pipa_harness.
+#!/bin/sh
+# bootstrap.sh — one-command installer for pipa_harness.
 #
-# Run from anywhere (curl | bash) to install the harness into a fixed location,
-# add it to PATH, and run the one-command setup.
+# curl|sh friendly:
+#   curl -fsSL https://raw.githubusercontent.com/OWNER/pipa_harness/main/bootstrap.sh | sh
 #
-#   curl -fsSL https://raw.githubusercontent.com/lugaol/pipa-harness/main/bootstrap.sh | bash
+# What it does:
+#   1. clone pipa_harness into ~/.pipa-harness (or update an existing checkout)
+#   2. add ~/.pipa-harness/bin to your shell PATH (idempotent)
+#   3. print next steps
 #
 # Environment overrides:
-#   PIPA_ROOT      install location (default: ~/.local/share/pipa-harness)
-#   PIPA_REPO      git repo URL (default: https://github.com/lugaol/pipa-harness.git)
-#   PIPA_BRANCH    branch/tag to checkout (default: main)
+#   REPO_URL     git repo to clone   (default below; replace OWNER)
+#   PIPA_BRANCH  branch/tag          (default: main)
+#   PIPA_HOME    install location    (default: ~/.pipa-harness)
 set -eu
 
-PIPA_ROOT="${PIPA_ROOT:-$HOME/.local/share/pipa-harness}"
-PIPA_REPO="${PIPA_REPO:-https://github.com/lugaol/pipa-harness.git}"
+REPO_URL="${REPO_URL:-https://github.com/OWNER/pipa_harness.git}"
 PIPA_BRANCH="${PIPA_BRANCH:-main}"
+DEST="${PIPA_HOME:-$HOME/.pipa-harness}"
 
-mkdir -p "$(dirname "$PIPA_ROOT")"
+say() { printf '[bootstrap] %s\n' "$*"; }
 
-# ── clone or update ──────────────────────────────────────────────────────────
-if [ -d "$PIPA_ROOT/.git" ]; then
-  echo "[bootstrap] updating pipa_harness in $PIPA_ROOT"
-  git -C "$PIPA_ROOT" fetch --depth=1 origin "$PIPA_BRANCH" || true
-  git -C "$PIPA_ROOT" checkout "$PIPA_BRANCH" || true
-  git -C "$PIPA_ROOT" pull --ff-only origin "$PIPA_BRANCH" || true
+mkdir -p "$(dirname "$DEST")"
+
+# 1. clone or update ──────────────────────────────────────────────────────────
+if [ -d "$DEST/.git" ]; then
+	say "updating existing checkout in $DEST"
+	git -C "$DEST" pull --ff-only || {
+		say "WARN: git pull failed — keeping existing files as-is"
+	}
+elif [ -e "$DEST" ]; then
+	echo "ERROR: $DEST exists but is not a git checkout." >&2
+	echo "Move it away or remove it, then re-run bootstrap.sh." >&2
+	exit 1
 else
-  echo "[bootstrap] cloning pipa_harness into $PIPA_ROOT"
-  rm -rf "$PIPA_ROOT"
-  git clone --depth=1 --branch "$PIPA_BRANCH" "$PIPA_REPO" "$PIPA_ROOT"
+	say "cloning $REPO_URL -> $DEST"
+	git clone --depth=1 --branch "$PIPA_BRANCH" "$REPO_URL" "$DEST"
 fi
 
-# ── PATH ───────────────────────────────────────────────────────────────────────
-line="export PATH=\"$PIPA_ROOT/bin:\$HOME/.opencode/bin:\$HOME/.local/bin:\$PATH\""
-updated_rc=0
+[ -x "$DEST/bin/pipa" ] || {
+	echo "ERROR: $DEST/bin/pipa missing after clone — check REPO_URL/branch." >&2
+	exit 1
+}
+
+# 2. PATH line (idempotent) — mirrors services.persist_path() in pipa/services.py
+line="export PATH=\"$DEST/bin:\$HOME/.opencode/bin:\$HOME/.local/bin:\$PATH\""
 for rc in "$HOME/.zshrc" "$HOME/.bashrc"; do
-  case "$rc" in
-    *.zshrc)  [ -f "$rc" ] || [ "$(basename "${SHELL:-}")" = zsh ] || continue ;;
-    *.bashrc) [ -f "$rc" ] || [ "$(basename "${SHELL:-}")" = bash ] || continue ;;
-  esac
-  if [ -f "$rc" ] && grep -qF "$PIPA_ROOT/bin" "$rc" 2>/dev/null; then
-    echo "[bootstrap] PATH already in $(basename "$rc")"
-  else
-    { echo ""; echo "# pipa_harness (added by bootstrap.sh)"; echo "$line"; } >> "$rc"
-    echo "[bootstrap] PATH added to $(basename "$rc")"
-    updated_rc=1
-  fi
+	case "$rc" in
+		*.zshrc)  [ -f "$rc" ] || [ "${SHELL##*/}" = zsh ] || continue ;;
+		*.bashrc) [ -f "$rc" ] || [ "${SHELL##*/}" = bash ] || continue ;;
+	esac
+	if [ -f "$rc" ] && grep -qF "$DEST/bin" "$rc" 2>/dev/null; then
+		say "PATH already in $(basename "$rc")"
+	else
+		{ printf '\n# pipa_harness (pipa CLI + runtimes + uv tools)\n%s\n' "$line"; } >>"$rc"
+		say "PATH added to $(basename "$rc") (open a new terminal to pick it up)"
+	fi
 done
 
-export PATH="$PIPA_ROOT/bin:$HOME/.opencode/bin:$HOME/.local/bin:$PATH"
+export PATH="$DEST/bin:$PATH"
 
-# ── run the one-command setup ──────────────────────────────────────────────────
-echo "[bootstrap] running pipa-up..."
-exec "$PIPA_ROOT/bin/pipa-up.sh" "$@"
+# 3. next steps ───────────────────────────────────────────────────────────────
+say "installed pipa_harness at $DEST"
+say ""
+say "Next steps:"
+say "  pipa up            # tools + services + wire current project"
+say "  pipa status        # health check"
+say ""
+say "Optional component installs:"
+say "  cd $DEST && bin/pipa install <uv|ollama|litellm|graphify|dsh|opencode|apps>"
+say "  make -C $DEST/install wire      # same as 'pipa up', no GUI apps/model pulls"

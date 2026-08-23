@@ -1,0 +1,34 @@
+{% extends "base.html" %}
+{% block title %}Memory · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Memory recall</h1>
+
+<form method="get" action="/memory" class="filter-bar">
+  <input type="text" name="q" value="{{ q }}" placeholder="query across memory-db, vault, code-graph…" autofocus>
+  <button type="submit">Search</button>
+</form>
+
+{% if error %}
+  {% with message='Recall failed — check memory index and vault paths.' %}{% include "empty_state.html" %}{% endwith %}
+{% elif searched and not hits %}
+  {% with message='No hits for this query.' %}{% include "empty_state.html" %}{% endwith %}
+{% endif %}
+
+<div class="cards">
+  {% for h in hits %}
+  <div class="card agent-card">
+    <div class="stat-label">
+      {{ h.title }}
+      {% if h.expired %}<span class="badge expired">EXPIRED</span>{% endif %}
+    </div>
+    <p class="agent-desc mono">{{ h.detail }}</p>
+    <div class="chip-row">
+      <span class="badge">{{ h.source }}</span>
+      <span class="badge dim-badge">score {{ '%.1f'.format(h.score) }}</span>
+      {% if h.valid_until %}<span class="badge dim-badge">valid_until {{ h.valid_until }}</span>{% endif %}
+    </div>
+    {% if h.path %}<p class="dim mono path-cell">{{ h.path }}</p>{% endif %}
+  </div>
+  {% endfor %}
+</div>
+{% endblock %}

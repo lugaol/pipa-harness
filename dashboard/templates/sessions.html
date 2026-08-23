@@ -1,0 +1,9 @@
+{% extends "base.html" %}
+{% block title %}Sessions · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Sessions</h1>
+<p class="dim">{{ count }} session(s) in the active log — newest first.</p>
+{% with rows=rows, columns=columns, empty_message='No sessions recorded yet.' %}
+  {% include "table.html" %}
+{% endwith %}
+{% endblock %}

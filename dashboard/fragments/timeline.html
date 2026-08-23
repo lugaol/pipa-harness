@@ -1,0 +1,20 @@
+{% if rows %}
+<div class="table-wrap">
+  <table class="timeline">
+    <thead>
+      <tr><th>offset</th><th>event</th><th>detail</th></tr>
+    </thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td class="mono nowrap">{{ r.offset }}</td>
+        <td><span class="badge">{{ r.event }}</span></td>
+        <td class="mono detail-cell">{{ r.detail }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+{% with message = empty_message | default('No events recorded for this session.') %}{% include "empty_state.html" %}{% endwith %}
+{% endif %}

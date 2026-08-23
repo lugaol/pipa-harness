@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Overview · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Overview</h1>
+
+<div class="cards">
+  {% for c in cards %}
+    {% with label=c.label, value=c.value, detail=c.detail %}{% include "stat_card.html" %}{% endwith %}
+  {% endfor %}
+</div>
+
+<section class="panel">
+  <h2>Services</h2>
+  <table>
+    <thead><tr><th>check</th><th>status</th><th>detail</th></tr></thead>
+    <tbody>
+      {% for c in checks %}
+      <tr>
+        <td>{{ c.name }}</td>
+        <td>{% if c.ok %}<span class="badge ok">up</span>{% else %}<span class="badge warn">down</span>{% endif %}</td>
+        <td class="mono dim">{{ c.detail }}</td>
+      </tr>
+      {% else %}
+      <tr><td colspan="3">{% with message='Service checks unavailable.' %}{% include "empty_state.html" %}{% endwith %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  <form method="post" action="/api/evals/run" class="inline-form actions">
+    <button type="submit">Run evals</button>
+  </form>
+</section>
+
+<section class="panel">
+  <h2>Active project</h2>
+  {% if project %}
+  <p>
+    <strong>{{ project.name }}</strong>
+    <span class="dim mono">({{ project.path }})</span>
+    · runtime <span class="badge">{{ project.runtime }}</span>
+    <a href="/sessions" class="row-link">view sessions →</a>
+  </p>
+  {% else %}
+    {% with message='No active pipa project detected from cwd.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endif %}
+</section>
+{% endblock %}

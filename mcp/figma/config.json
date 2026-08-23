@@ -1,0 +1,5 @@
+{
+  "name": "figma",
+  "enabled": false,
+  "mcp": { "type": "local", "command": "npx", "args": ["-y", "@figma/mcp-server"], "env_note": "set FIGMA_TOKEN in ~/.pipa-harness/.env" }
+}

@@ -1,0 +1,30 @@
+# models/settings.yaml — shared gateway settings merged into every composed config.
+litellm_settings:
+  drop_params: true
+  num_retries: 2
+  request_timeout: 300
+  compress_tool_results: true
+  compress_threshold_lines: 200
+  context_budget: 0.5
+  cache_prompt: true
+  session_summaries: true
+  cache_control:
+    enabled: true
+    provider: auto
+  # spend ledger — resolved relative to this dir (models/tools/litellm_hooks/)
+  callbacks:
+  - tools.litellm_hooks.spend_callback.proxy_handler_instance
+
+router_settings:
+  routing_strategy: simple-shuffle
+  fallbacks:
+  - primary:
+    - deep
+    - fast
+  - deep:
+    - primary
+  - fast:
+    - primary
+
+general_settings:
+  master_key: sk-pipa-local

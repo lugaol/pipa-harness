@@ -1,0 +1,30 @@
+name: Agent Evals
+
+on:
+  pull_request:
+    paths:
+      - "agents/**"
+      - ".pipa/extension/agents/**"
+      - "tools/evals/**"
+      - "action.yml"
+  push:
+    branches: [main]
+    paths:
+      - "agents/**"
+      - ".pipa/extension/agents/**"
+      - "tools/evals/**"
+      - "action.yml"
+
+permissions:
+  contents: read
+
+jobs:
+  evals:
+    name: Agent behavioral evals
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run agent evals
+        uses: ./

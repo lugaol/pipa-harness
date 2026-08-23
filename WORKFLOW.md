@@ -16,7 +16,7 @@ LAYER 2   skills/*/SKILL.md      → trigger-loaded by keyword
 LAYER 3   specs/<feature>/       → phase-driven: plan → story → build
 LAYER 4   graphify-out/ + vault/ → queried memory (MCP + files)
 LAYER 5   agents/*.md            → subagent definitions
-LAYER 6   .harness_extension/    → project-local overrides
+LAYER 6   .pipa/extension/       → project-local overrides
 ```
 
 | Layer | Trigger | Example |
@@ -27,7 +27,7 @@ LAYER 6   .harness_extension/    → project-local overrides
 | 3 | Phase invocation | @analyst → agents/analyst.md + specs/ |
 | 4 | Question + graphify exists | graphify query "Auth" → graphify-out/ |
 | 5 | @name mention | @dev → agents/dev.md |
-| 6 | .harness_extension/ present | Project-specific rules/skills |
+| 6 | .pipa/extension/ present | Project-specific rules/skills |
 
 ---
 
@@ -169,7 +169,7 @@ Rule: For architecture questions, always try graphify first. Fall back to grep o
 
 ## Pattern I: Model orchestration
 
-All calls go through LiteLLM aliases (`config/litellm.yaml`). Never call providers directly.
+All calls go through LiteLLM aliases composed from `models/{local,cloud}/`. Never call providers directly.
 
 | Alias | Use for |
 |-------|---------|
@@ -185,16 +185,19 @@ Override via env: `LITELLM_MODEL_FAST`, `LITELLM_MODEL_PRIMARY`, etc.
 
 ## Pattern J: Extension model (project-local customization)
 
-New model: `.harness_extension/` in each project.
+New model: `.pipa/` in each project (`pipa init`, migrate with `pipa migrate`).
 
 ```
-.harness_extension/
-├── AGENTS.md            → project-specific router (symlinked)
-├── rules/               → project-scoped rules
-├── skills/              → project-specific skills
-├── agents/              → project-specific subagents
-├── state/               → SESSION.md + PLAN.md
-└── vault/               → decisions/ + research/ + architecture/
+.pipa/
+├── runtime              → selected runtime (opencode | deepseek-harness)
+├── extension/
+│   ├── AGENTS.md        → project-specific router (symlinked from root)
+│   ├── rules/           → project-scoped rules
+│   ├── skills/          → project-specific skills
+│   ├── agents/          → project-specific subagents
+│   └── vault/           → decisions/ + research/ + architecture/
+├── state/               → session.log.ndjson, SESSION.md + PLAN.md
+└── <runtime>/           → generated runtime config (gitignored)
 ```
 
 Conflict priority: turn instruction > AGENTS.md > project extension > base rules/ > skills/ > vault

@@ -1,0 +1,5 @@
+{
+  "name": "jira",
+  "enabled": false,
+  "mcp": { "type": "local", "command": "npx", "args": ["-y", "@jira/mcp-server"], "env_note": "set JIRA_TOKEN in ~/.pipa-harness/.env" }
+}

@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Evals · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Evals</h1>
+<p class="dim">Runs <span class="mono">tools/evals/run.py</span> (agent contract checks) with a 60s timeout.</p>
+
+<form method="post" action="/api/evals/run" class="inline-form actions">
+  <button type="submit">Run evals</button>
+</form>
+
+{% if result %}
+  {% if not result.ok %}
+    <section class="panel">
+      <span class="badge warn">failed</span>
+      <pre class="mono error-box">{{ result.detail }}</pre>
+    </section>
+  {% else %}
+    <p class="dim">
+      {{ result.total }} agent(s) checked ·
+      {% if result.failed %}<span class="badge warn">{{ result.failed }} failing</span>
+      {% else %}<span class="badge ok">all pass</span>{% endif %}
+    </p>
+    <div class="table-wrap">
+      <table>
+        <thead><tr><th>file</th><th>checks</th><th>verdict</th></tr></thead>
+        <tbody>
+          {% for r in result.rows %}
+          <tr>
+            <td class="mono">{{ r.file }}</td>
+            <td>
+              {% for c in r.checks %}
+              <div>{{ c.name }}: {% if c.ok %}<span class="badge ok">pass</span>{% else %}<span class="badge warn">FAIL</span>{% endif %}</div>
+              {% endfor %}
+            </td>
+            <td>{% if r.ok %}<span class="badge ok">pass</span>{% else %}<span class="badge warn">FAIL</span>{% endif %}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+  {% endif %}
+{% else %}
+  {% with message='No eval run yet — press “Run evals”.' %}{% include "empty_state.html" %}{% endwith %}
+{% endif %}
+{% endblock %}

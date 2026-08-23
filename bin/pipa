@@ -1,0 +1,8 @@
+#!/bin/sh
+# pipa — harness CLI entrypoint.
+# Resolves the harness root (PIPA_ROOT or the checkout this script lives in)
+# and runs the pipa Python package. Works from any directory.
+set -eu
+here="$(cd "$(dirname "$0")" && pwd)"
+root="${PIPA_ROOT:-$(cd "$here/.." && pwd)}"
+PYTHONPATH="$root${PYTHONPATH:+:$PYTHONPATH}" exec python3 -m pipa "$@"

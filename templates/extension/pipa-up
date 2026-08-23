@@ -1,3 +1,0 @@
-#!/bin/bash
-# pipa-up — start/check pipa harness from project root
-exec pipa-up.sh "$@"

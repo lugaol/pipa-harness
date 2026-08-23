@@ -1,0 +1,39 @@
+# cordis.patch.yml — pipa→DSH routing patch, applied by `pipa init` / `pipa up`.
+#
+# Real dsh patch format: a flat array of loader entries targeting rows by id.
+# Patched here: the dormant base-bundle llm-pi-ai adapter gets one hand-declared
+# OpenAI-compatible route pointing at the shared LiteLLM gateway, and the
+# default agent model switches to it. API keys are NEVER in YAML — apiKeyEnv
+# names an env var resolved per-request from $LITELLM_API_KEY or
+# ~/.dsh/.credentials.yaml (pipa writes the ref there).
+#
+# Notes:
+#   - Patches replace a row's whole config block (no deep merge).
+#   - dsh has no fallback chains — recovery is retryPolicy per route.
+#   - Hot-reloads while dsh runs; verify with: dsh --profile headless --dump-config
+- id: agent-default-model
+  config:
+    provider: litellm
+    model: primary
+
+- id: llm-pi-ai
+  config:
+    providers:
+      litellm:
+        displayName: LiteLLM Gateway (pipa)
+        apiKeyEnv: LITELLM_API_KEY
+        api: openai-completions
+        baseURL: @LITELLM_URL@/v1
+        defaultContextWindow: 262144
+        defaultMaxTokens: 32768
+        retryPolicy:
+          mode: normal
+          maxRetries: 2
+        compat:
+          supportsDeveloperRole: false
+          maxTokensField: max_tokens
+        models:
+          - id: primary
+          - id: fast
+          - id: deep
+          - id: explore

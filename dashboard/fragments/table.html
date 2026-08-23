@@ -1,0 +1,26 @@
+{% if rows %}
+<div class="table-wrap">
+  <table>
+    {% if columns is defined and columns %}
+    <thead>
+      <tr>{% for col in columns %}<th>{{ col }}</th>{% endfor %}</tr>
+    </thead>
+    {% endif %}
+    <tbody>
+      {% for row in rows %}
+      <tr>
+        {%- if row is mapping and row.cells is defined %}
+          {%- for cell in row.cells %}
+          <td>{% if loop.first and row.href is defined and row.href %}<a class="row-link" href="{{ row.href }}">{{ cell }}</a>{% else %}{{ cell }}{% endif %}</td>
+          {%- endfor %}
+        {%- else %}
+          {%- for cell in row %}<td>{{ cell }}</td>{% endfor %}
+        {%- endif %}
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+{% with message = empty_message | default('Nothing here yet.') %}{% include "empty_state.html" %}{% endwith %}
+{% endif %}

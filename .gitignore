@@ -21,3 +21,16 @@ state/*.log
 # Obsidian workspace state (committed app config stays)
 .obsidian/workspace*.json
 state/*.db
+
+# pipa_harness
+.pipa/state/
+.pipa/memory.db
+.opencode
+.pipa/*.local.*
+
+# runtime state & generated
+graphify-out/
+state/
+models/.effective.yaml
+__pycache__/
+*.pyc
