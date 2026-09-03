@@ -1,6 +1,6 @@
 ---
 name: debugging
-description: "Systematic bug triage and root-cause analysis. Triggers: bug, error, crash, exception, stacktrace, broken, not working, fails, fails. Reproduce, isolate, hypothesize, fix."
+description: "Systematic bug triage and root-cause analysis. Triggers: bug, error, crash, exception, stacktrace, broken, not working, fails. Reproduce, isolate, hypothesize, fix."
 ---
 # Debugging workflow
 

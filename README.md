@@ -48,6 +48,7 @@ Update later with `make -C ~/.pipa-harness update` (git pull --ff-only).
   runtime          selected runtime name: opencode | deepseek-harness
   rules/*.md       project rules — load together with global rules
   skills/          optional project skills — same name beats the global skill
+  agents-local/    project-level agents (exposed to OpenCode via symlink)
   memory/
     decisions/     dated decisions (as_of / valid_until)
     research/      external findings
@@ -65,7 +66,7 @@ Legacy layout? Run `pipa migrate` to fold `.harness_extension/` into `.pipa/`.
 | Rules | `rules/*.md` | `.pipa/rules/*.md` (both apply) |
 | Skills | `skills/*/SKILL.md` | `.pipa/skills/` wins on same name |
 | Memory | `vault/` | `.pipa/memory/` searched first |
-| Models | `models/` fragments + gateway | nothing |
+| Models | live provider discovery + gateway | nothing |
 | Runtime config | wired machine-global | nothing — never stored in projects |
 
 ## CLI reference
@@ -88,21 +89,32 @@ pipa install <component>       # uv|ollama|litellm|graphify|dsh|opencode|apps
 
 ## Models & keys
 
-Model config is composed from fragments at wire time — never edited by hand:
+Model lists are **discovered live from providers** — nothing is hardcoded:
 
-- `models/local/ollama.yaml` — always-on fallback tier ($0 mode works out of the box)
-- `models/cloud/*.yaml` — included only when their `requires:` env key is set; fragments override aliases upward, so cloud tiers upgrade local roles transparently
+- `pipa.providers` queries each provider's model-listing endpoint (Ollama,
+  OpenCode Zen, OpenRouter `:free`, Kilo free, Moonshot) and caches the
+  result in `state/model_catalog.json`
+- Refresh happens on `pipa up` and via the dashboard's
+  **Refresh from providers** button; only models reported by the provider
+  are ever routed
+- Which model backs each tier (`lowest..xhigh`) is your call, made in the
+  dashboard Models page — nothing is auto-classified
 - `models/settings.yaml` — shared gateway settings (spend ledger callback lives here)
 - Composer output: `models/.effective.yaml` (generated, gitignored), consumed by the LiteLLM proxy
 
-| Alias | Use for |
-|-------|---------|
-| `fast` | triage, QA verdicts, summaries |
-| `primary` | implementation, dev agent |
-| `deep` | research, planning, architecture |
-| `explore` | read-only codebase Q&A |
+| Tier | Use for |
+|------|---------|
+| `lowest` | read-only codebase Q&A, triage |
+| `low` | QA verdicts, summaries |
+| `mid` | implementation, dev agent |
+| `high` | research, planning, architecture |
+| `xhigh` | hardest reasoning, long-horizon work |
 
-Cloud keys: `KILO_API_KEY` (primary/fast/explore), `KIMI_API_KEY` (deep), `OPENROUTER_API_KEY` (free-tier OpenRouter models). No keys? You are still fully functional on Ollama.
+Tiers are **user-assigned** in the dashboard (Models page), and each agent can
+get its own tier on the Agents page.
+
+Cloud keys: `KILO_API_KEY`, `KIMI_API_KEY`, `OPENROUTER_API_KEY`,
+`OPENCODE_ZEN_API_KEY`. No keys? You are still fully functional on Ollama.
 
 ## MCP registry
 
@@ -156,7 +168,7 @@ rules/               path-scoped rules (git, testing, security, code-review)
 skills/              trigger-loaded skills (debugging, release, performance, ...)
 agents/              subagents: analyst -> pm -> architect -> sm -> dev -> qa, explorer, researcher
 clis/                per-runtime templates + wire entries: opencode/, deepseek-harness/
-models/              LiteLLM fragments: local/, cloud/, settings.yaml -> .effective.yaml (generated)
+models/              LiteLLM settings.yaml -> .effective.yaml (generated; model lists discovered from providers, cached in state/)
 mcp/                 MCP integration registry (<name>/config.json)
 tools/               evals/, litellm/, memory_store/, ollama/, tracing.py
 dashboard/           FastAPI app: pages/, fragments/, templates/ (:8080)
@@ -174,7 +186,7 @@ docs/                SESSION_BUS.md, AGENT_CI.md, ARCHITECTURE.md
 
 ## Development
 
-Run the test suite (pins config contracts: gateway fragments, runtime wiring, hooks schema, recall ranking, spend ledger):
+Run the test suite (pins config contracts: dynamic discovery/composition, runtime wiring, hooks schema, recall ranking, spend ledger):
 
 ```bash
 uv run --with pytest --with pyyaml --with fastapi --with uvicorn --with jinja2 --with httpx python -m pytest tests/ -q

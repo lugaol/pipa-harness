@@ -79,7 +79,10 @@ def test_gateway_endpoint_and_key():
 
 def test_declared_models_subset_of_gateway_aliases():
     models = _load_jsonc(GLOBAL_JSONC)["provider"]["litellm"]["models"]
-    assert set(models) <= _gateway_aliases()
+    # Tier ids are exempt: injected at wire time from the user's dashboard
+    # assignments, so no static fragment has to provide them.
+    tier_ids = {"lowest", "low", "mid", "high", "xhigh"}
+    assert set(models) - tier_ids <= _gateway_aliases()
 
 
 def test_global_instructions_cover_both_tiers():

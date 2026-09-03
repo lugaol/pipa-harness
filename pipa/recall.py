@@ -3,8 +3,9 @@
 Fuses results from:
   - memory-db    the SQLite store built by tools/memory_store/index_vault.py
                  (<project>/.pipa/state/memory.db, else harness state/memory.db)
-  - vault        raw markdown notes (<project>/.pipa/extension/vault when a
-                 project is given, plus <harness>/vault)
+  - vault        raw markdown notes (<project>/.pipa/memory when a project is
+                 given, plus <harness>/vault; legacy .pipa/extension/vault and
+                 .harness_extension/vault still read for compatibility)
   - code-graph   graphify's knowledge graph (graphify-out/graph.json from the
                  project root, else the harness root)
 
@@ -179,7 +180,9 @@ def _recall_memory_db(toks: set[str], project: Path | None) -> tuple[bool, list[
 def _vault_dirs(project: Path | None) -> list[Path]:
     dirs = []
     if project:
+        dirs.append(Path(project) / ".pipa" / "memory")
         dirs.append(Path(project) / ".pipa" / "extension" / "vault")
+        dirs.append(Path(project) / ".harness_extension" / "vault")
     dirs.append(config.harness_root() / "vault")
     seen: set[Path] = set()
     unique = []

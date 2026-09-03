@@ -3,6 +3,8 @@
 {% block content %}
 <h1>Overview</h1>
 
+{% if flash %}<div class="flash {{ 'error' if not flash_ok else '' }}">{{ flash }}</div>{% endif %}
+
 <div class="cards">
   {% for c in cards %}
     {% with label=c.label, value=c.value, detail=c.detail %}{% include "stat_card.html" %}{% endwith %}
@@ -12,22 +14,45 @@
 <section class="panel">
   <h2>Services</h2>
   <table>
-    <thead><tr><th>check</th><th>status</th><th>detail</th></tr></thead>
+    <thead><tr><th>check</th><th>status</th><th>detail</th><th>action</th></tr></thead>
     <tbody>
       {% for c in checks %}
       <tr>
         <td>{{ c.name }}</td>
         <td>{% if c.ok %}<span class="badge ok">up</span>{% else %}<span class="badge warn">down</span>{% endif %}</td>
         <td class="mono dim">{{ c.detail }}</td>
+        <td class="nowrap">
+          {% if c.name == 'litellm gateway' %}
+          <form method="post" action="/api/services/gateway/restart" class="inline-form">
+            <button type="submit" {% if not c.ok %}title="gateway down — this will start it"{% endif %}>Restart</button>
+          </form>
+          {% elif c.name == 'ollama' %}
+          <form method="post" action="/api/services/ollama/start" class="inline-form">
+            <button type="submit" {% if c.ok %}disabled title="already running"{% endif %}
+                    {% if not c.ok %}title="not running — this will start it"{% endif %}>Start</button>
+          </form>
+          {% else %}—{% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="3">{% with message='Service checks unavailable.' %}{% include "empty_state.html" %}{% endwith %}</td></tr>
+      <tr><td colspan="4">{% with message='Service checks unavailable.' %}{% include "empty_state.html" %}{% endwith %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
   <form method="post" action="/api/evals/run" class="inline-form actions">
     <button type="submit">Run evals</button>
   </form>
+</section>
+
+<section class="panel">
+  <h2>API keys</h2>
+  <p class="dim">Names only — values are never shown or logged.</p>
+  <div class="chip-row">
+    {% for k in env_keys %}
+      {% if k.present %}<span class="badge ok">{{ k.name }} SET</span>
+      {% else %}<span class="badge warn">{{ k.name }} UNSET</span>{% endif %}
+    {% endfor %}
+  </div>
 </section>
 
 <section class="panel">

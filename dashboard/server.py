@@ -55,4 +55,7 @@ if __name__ == "__main__":
     from pipa import config  # noqa: E402  (needs the bootstrap above)
 
     port = int(os.environ.get("DASHBOARD_PORT", config.DASHBOARD_PORT))
-    uvicorn.run(app, host="0.0.0.0", port=port, log_level="warning")
+    # Loopback by default: the dashboard can rewrite rules and restart
+    # services, so LAN exposure must be an explicit opt-in.
+    host = os.environ.get("DASHBOARD_HOST", "127.0.0.1")
+    uvicorn.run(app, host=host, port=port, log_level="warning")

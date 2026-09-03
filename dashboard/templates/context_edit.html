@@ -1,0 +1,27 @@
+{% extends "base.html" %}
+{% set is_memory = memory|default(false) %}
+{% set list_url = ('/memory?scope=' + tier + (('&proj=' + proj) if proj else '')) if is_memory else ('/context?tier=' + tier + '&tab=' + tab) %}
+{% block title %}{{ 'New' if creating else 'Edit' }} · {{ 'Memory' if is_memory else 'Context' }} · pipa dashboard{% endblock %}
+{% block content %}
+<h1>{{ 'New' if creating else 'Edit' }} <span class="mono">{{ rel }}</span></h1>
+<p class="dim">
+  scope <span class="badge">{{ tier }}</span> · tab <span class="badge">{{ tab }}</span>
+  {% if proj %}· project <span class="badge mono">{{ proj.rsplit('/', 1)[-1] }}</span>{% endif %}
+  · <a href="{{ list_url }}">← back to listing</a>
+</p>
+
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+<form method="post" action="{{ '/memory/save' if is_memory else '/context/save' }}">
+  <input type="hidden" name="proj" value="{{ proj }}">
+  <input type="hidden" name="tier" value="{{ tier }}">
+  <input type="hidden" name="tab" value="{{ tab }}">
+  <input type="hidden" name="path" value="{{ rel }}">
+  <textarea class="editor mono" name="content" rows="28" spellcheck="false"
+            placeholder="markdown content…">{{ content }}</textarea>
+  <div class="actions inline-form">
+    <button type="submit">Save</button>
+    <a href="{{ list_url }}" class="btn-cancel">Cancel</a>
+  </div>
+</form>
+{% endblock %}

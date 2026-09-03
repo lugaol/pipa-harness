@@ -1,67 +1,57 @@
-"""Models page: gateway aliases grouped local/cloud + agent override editor."""
+"""Models page: user-owned tier configuration + plain model list, one page."""
 from __future__ import annotations
 
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from data import agents as agents_data
-from data import gateway
+from pipa.model_registry import TIER_ALIASES
+
+from data import models as models_data
 from . import form_fields, render
 
 router = APIRouter()
-
-_CLOUD_PREFIXES = ("or-", "kilo", "kimi")
-
-
-def group_of(model_id: str) -> str:
-    """Prefix heuristic: or-* openrouter, kilo*/kimi* cloud, else local."""
-    mid = model_id.lower()
-    return "cloud" if mid.startswith(_CLOUD_PREFIXES) else "local"
 
 
 @router.get("/models")
 def models_view(request: Request):
     try:
-        model_ids = gateway.list_models()
+        tiers = models_data.tier_rows()
     except Exception:
-        model_ids = []
-    groups = {
-        "local": [m for m in model_ids if group_of(m) == "local"],
-        "cloud": [m for m in model_ids if group_of(m) == "cloud"],
-    }
+        tiers = [{"alias": t, "label": t.capitalize(), "assigned_alias": "",
+                  "display": "", "status": "unset"} for t in TIER_ALIASES]
     try:
-        discovered = agents_data.discover_agents()
-        overrides = agents_data.load_overrides()
+        catalog = models_data.catalog()
+        env_keys = models_data.env_keys()
+        discovery = models_data.refresh_status()
     except Exception:
-        discovered, overrides = [], {}
-
-    def _override_for(name: str):
-        row = overrides.get(name) or {}
-        if isinstance(row, dict):
-            return str(row.get("model") or "")
-        return ""
-
-    agent_rows = [
-        {
-            "name": a["name"],
-            "base_model": a["model"],
-            "override": _override_for(a["name"]),
-        }
-        for a in discovered
-    ]
+        catalog, env_keys, discovery = [], [], {"fetched_at": None, "providers": []}
     return render(
         request,
         "models.html",
-        groups=groups,
-        total=len(model_ids),
-        agent_rows=agent_rows,
+        tiers=tiers,
+        catalog=catalog,
+        env_keys=env_keys,
+        discovery=discovery,
     )
 
 
-@router.post("/api/overrides")
-async def save_override(request: Request):
+@router.post("/api/tiers")
+async def save_tier(request: Request):
     fields = await form_fields(request)
-    agents_data.set_override(
-        str(fields.get("agent", "")), str(fields.get("model", ""))
+    ok, _msg = models_data.set_tier(
+        str(fields.get("tier", "")), str(fields.get("model", ""))
     )
-    return RedirectResponse(url="/models", status_code=303)
+    return RedirectResponse(url="/models" + ("?saved=1" if ok else "?error=1"),
+                            status_code=303)
+
+
+@router.post("/api/models/refresh")
+async def refresh_models(request: Request):
+    try:
+        models_data.refresh_models()
+        status = models_data.refresh_status()
+        ok = bool(status["fetched_at"]) and any(p["ok"] for p in status["providers"])
+    except Exception:
+        ok = False
+    return RedirectResponse(url="/models" + ("?refreshed=1" if ok else "?refresh-error=1"),
+                            status_code=303)

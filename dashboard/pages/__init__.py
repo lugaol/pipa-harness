@@ -21,6 +21,35 @@ templates.env.loader = ChoiceLoader([
 ])
 
 
+def _pretty_model(alias: str) -> str:
+    try:
+        from pipa.model_registry import display_alias
+
+        return display_alias(alias)
+    except Exception:
+        return alias
+
+
+def _tier_options() -> list[dict]:
+    """[{value, label}] — the five fixed tiers for agent selects."""
+    try:
+        from pipa.model_registry import TIER_ALIASES, tier_resolution
+
+        resolved = tier_resolution()
+        options = [{"value": "", "label": "Auto (agent default)"}]
+        for tier in TIER_ALIASES:
+            e = resolved.get(tier)
+            label = f"{tier} — {e.display}" if e else f"{tier} — not set"
+            options.append({"value": tier, "label": label})
+        return options
+    except Exception:
+        return [{"value": "", "label": "Auto (agent default)"}]
+
+
+templates.env.filters["pretty"] = _pretty_model
+templates.env.globals["tier_options"] = _tier_options
+
+
 def render(request, name: str, **context):
     """TemplateResponse shorthand that always passes the request."""
     return templates.TemplateResponse(

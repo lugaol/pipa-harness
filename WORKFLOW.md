@@ -16,7 +16,7 @@ LAYER 2   skills/*/SKILL.md      → trigger-loaded by keyword
 LAYER 3   specs/<feature>/       → phase-driven: plan → story → build
 LAYER 4   graphify-out/ + vault/ → queried memory (MCP + files)
 LAYER 5   agents/*.md            → subagent definitions
-LAYER 6   .pipa/extension/       → project-local overrides
+LAYER 6   <project>/.pipa/       → thin project overlay (rules/skills/memory/state)
 ```
 
 | Layer | Trigger | Example |
@@ -27,7 +27,7 @@ LAYER 6   .pipa/extension/       → project-local overrides
 | 3 | Phase invocation | @analyst → agents/analyst.md + specs/ |
 | 4 | Question + graphify exists | graphify query "Auth" → graphify-out/ |
 | 5 | @name mention | @dev → agents/dev.md |
-| 6 | .pipa/extension/ present | Project-specific rules/skills |
+| 6 | project `.pipa/` present | Project-specific rules/skills/memory |
 
 ---
 
@@ -58,14 +58,14 @@ Each agent has: frontmatter (`description`, `mode`, `model`, `permission`), meth
 
 | Agent | Model | Permission | Output |
 |-------|-------|------------|--------|
-| @analyst | deep | edit + graphify + webfetch | `specs/<feature>/briefing.md` |
-| @pm | deep | edit + graphify + ls/cat | `specs/<feature>/prd.md` |
-| @architect | deep | edit + graphify + grep | `specs/<feature>/architecture.md` |
-| @sm | deep | edit + ls/cat + graphify | `specs/<feature>/stories/NN-*.md` |
-| @dev | primary | edit + bash (ask) | implemented story + test result |
-| @qa | fast | bash + git diff/status | PASS or FAIL + file:line |
-| @explorer | explore | read-only grep/find | ≤50 lines, file:line refs |
-| @researcher | deep | edit + webfetch | vault note + ≤5-line summary |
+| @analyst | high | edit + graphify + webfetch | `specs/<feature>/briefing.md` |
+| @pm | high | edit + graphify + ls/cat | `specs/<feature>/prd.md` |
+| @architect | high | edit + graphify + grep | `specs/<feature>/architecture.md` |
+| @sm | high | edit + ls/cat + graphify | `specs/<feature>/stories/NN-*.md` |
+| @dev | mid | edit + bash (ask) | implemented story + test result |
+| @qa | low | bash + git diff/status | PASS or FAIL + file:line |
+| @explorer | lowest | read-only grep/find | ≤50 lines, file:line refs |
+| @researcher | high | edit + webfetch | vault note + ≤5-line summary |
 
 ---
 
@@ -169,38 +169,43 @@ Rule: For architecture questions, always try graphify first. Fall back to grep o
 
 ## Pattern I: Model orchestration
 
-All calls go through LiteLLM aliases composed from `models/{local,cloud}/`. Never call providers directly.
+All calls go through LiteLLM aliases. Never call providers directly. Model
+lists are discovered live from providers (`pipa/providers.py`), cached in
+`state/model_catalog.json`, and composed with user tier assignments into
+`models/.effective.yaml`.
 
 | Alias | Use for |
 |-------|---------|
-| fast | Triage, titles, summaries, QA |
-| primary | Implementation, dev agent, supervisor |
-| deep | Research, planning, architect |
-| explore | Read-only codebase Q&A |
-| kilo-free | Free Kilo Code models |
+| lowest | Read-only codebase Q&A, triage |
+| low | Triage, QA verdicts, summaries |
+| mid | Implementation, dev agent, supervisor |
+| high | Research, planning, architect |
+| xhigh | Hardest reasoning, long-horizon work |
 
-Override via env: `LITELLM_MODEL_FAST`, `LITELLM_MODEL_PRIMARY`, etc.
+Tiers are user-assigned in the dashboard Models page (`state/tier_assignments.json`).
 
 ---
 
 ## Pattern J: Extension model (project-local customization)
 
-New model: `.pipa/` in each project (`pipa init`, migrate with `pipa migrate`).
+New model: thin `.pipa/` overlay in each project (`pipa init`; legacy layouts
+migrate with `pipa migrate`).
 
 ```
 .pipa/
 ├── runtime              → selected runtime (opencode | deepseek-harness)
-├── extension/
-│   ├── AGENTS.md        → project-specific router (symlinked from root)
-│   ├── rules/           → project-scoped rules
-│   ├── skills/          → project-specific skills
-│   ├── agents/          → project-specific subagents
-│   └── vault/           → decisions/ + research/ + architecture/
-├── state/               → session.log.ndjson, SESSION.md + PLAN.md
-└── <runtime>/           → generated runtime config (gitignored)
+├── AGENTS.md            → project facts (symlinked from root as AGENTS.md)
+├── rules/               → project-scoped rules
+├── memory/              → decisions/ + research/
+├── skills/              → optional project skills (win on name clash)
+├── agents-local/        → project-specific subagents (exposed to opencode via symlink)
+└── state/               → session.log.ndjson, SESSION.md + PLAN.md, memory.db (gitignored)
 ```
 
-Conflict priority: turn instruction > AGENTS.md > project extension > base rules/ > skills/ > vault
+Legacy `.pipa/extension/` and `.harness_extension/` are still read for
+compatibility but created by nothing; `pipa migrate` converts them.
+
+Conflict priority: turn instruction > AGENTS.md > project overlay (.pipa/) > base rules/ > skills/ > vault
 
 ---
 
@@ -249,11 +254,11 @@ If blocker changes scope → escalate to `@pm` for scope decision.
 
 Independent tasks run concurrently via `task` tool:
 ```
-User: "Add blow detection + fix latency bug"
+User: "Add rate limiting + fix a flaky test"
   ↓
 Supervisor splits:
-  Task A: @researcher → blow detection paper (task_id: research-01)
-  Task B: @explorer   → latency code paths  (task_id: explore-02)
+  Task A: @researcher → rate-limiting approaches paper (task_id: research-01)
+  Task B: @explorer   → flaky-test code paths   (task_id: explore-02)
   ↓
 Both run in parallel
   ↓
@@ -271,10 +276,10 @@ its output with a transparency block:
 ## Harness usage
 - Agents used: @explorer, @dev, @qa
 - Skills loaded: debugging, code-review
-- Rules applied: audio-ndk (HARD), testing (HARD)
+- Rules applied: security (HARD), testing (HARD)
 - Tools used: graphify query, grep, git diff
 - Orchestration: sequential (explorer → dev → qa), 1 parallel task
-- Model routing: explore (cheapest) for search, primary for implementation, fast for verification
+- Model routing: lowest (cheapest) for search, mid for implementation, low for verification
 ```
 
 ---

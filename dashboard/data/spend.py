@@ -1,18 +1,17 @@
 """Spend-ledger reader bound to the harness state dir.
 
-Delegates aggregation to pipa.spend.summarize; a missing ledger yields
-the zeroed summary shape so pages never see exceptions.
+Delegates aggregation to pipa.spend; a missing ledger yields the zeroed
+summary shape so pages never see exceptions.
 """
 from __future__ import annotations
 
 from typing import Optional
 
-from pipa import config
 from pipa import spend as spend_ledger
 
 
 def ledger_path() -> Optional[str]:
-    path = config.state_dir() / "spend.ndjson"
+    path = spend_ledger.default_path()
     return str(path) if path.exists() else None
 
 

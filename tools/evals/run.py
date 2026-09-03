@@ -40,11 +40,17 @@ def check_qa_no_looks_good(content):
 
 def check_dev_golden_rules(content):
     """@dev must reference golden rules."""
-    return "golden rules" in content.lower() or "no alloc" in content.lower()
+    return "golden rules" in content.lower()
 
 def check_approval_gates(content):
-    """All agents must have approval gates for git push/commit."""
-    return "git push" in content and "approval" in content.lower()
+    """All agents must gate git push/commit behind a user prompt.
+
+    OpenCode permission actions are allow | ask | deny — "ask" IS the
+    approval gate (legacy frontmatter used the invalid value "approval").
+    """
+    low = content.lower()
+    gated = re.search(r'"git (push|commit)"\s*:\s*(ask|approval)', low)
+    return bool(gated) and "git push" in low
 
 def run_evals():
     results = []

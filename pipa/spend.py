@@ -12,12 +12,20 @@ import os
 from datetime import datetime, timezone
 from pathlib import Path
 
+from . import config
+
 
 def default_path() -> Path:
+    """Single source of truth for the ledger location.
+
+    $PIPA_SPEND_LOG (set by `pipa up` for the gateway process) wins so a
+    reader sees exactly what the running gateway writes; else the
+    harness-global state dir.
+    """
     env = os.environ.get("PIPA_SPEND_LOG")
     if env:
         return Path(env)
-    return Path.home() / ".pipa" / "spend.ndjson"
+    return config.state_dir() / "spend.ndjson"
 
 
 def iter_rows(path: Path):

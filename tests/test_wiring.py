@@ -93,6 +93,26 @@ def test_wire_opencode_merges_mcp_registry(home):
     assert "context7_*" in data["permission"]
 
 
+def test_wire_opencode_installs_session_bus_plugin(home):
+    runtime.wire_opencode(project=None, root=ROOT)
+    plugin = home / ".config" / "opencode" / "plugin" / "pipa-session-bus.js"
+    assert plugin.is_file()
+    text = plugin.read_text()
+    # placeholders substituted; hook target points at the harness bin
+    assert "@@PIPA_BIN@@" not in text and "@@PIPA_RUNTIME@@" not in text
+    assert (ROOT / "bin" / "pipa").as_posix() in text.replace("\\", "/")
+    assert '"opencode"' in text
+
+    # idempotent + create-only: never clobbers ANY existing plugin file
+    actions = runtime.wire_opencode(project=None, root=ROOT)
+    assert all(not a.startswith("+") for a in actions)
+    plugin.write_text("// my own plugin\n")
+    actions2 = runtime.wire_opencode(project=None, root=ROOT)
+    assert plugin.read_text() == "// my own plugin\n"
+    assert any(a.startswith("~ kept existing") and "pipa-session-bus" in a
+               for a in actions2)
+
+
 def test_gitignore_entries_match_thin_layout():
     joined = "\n".join(scaffold.GITIGNORE_ENTRIES)
     assert f"{config.PIPA_DIR}/state/" in joined
@@ -140,33 +160,107 @@ def test_check_extension_accepts_legacy_extension_layout(tmp_path, monkeypatch):
     assert results["AGENTS.md placeholders are filled"] is True
 
 
-# ── model composer ──────────────────────────────────────────────────────────
+# ── model composer (dynamic discovery) ──────────────────────────────────────
 
-def test_composer_includes_local_excludes_locked_cloud(monkeypatch, tmp_path):
-    monkeypatch.delenv("KILO_API_KEY", raising=False)
-    monkeypatch.delenv("KIMI_API_KEY", raising=False)
-    monkeypatch.delenv("OPENROUTER_API_KEY", raising=False)
-    monkeypatch.setattr(config, "models_dir", lambda: ROOT / "models")
+def _seed_cache(state: Path, providers: dict) -> None:
+    import json
+
+    state.mkdir(parents=True, exist_ok=True)
+    payload = {
+        "version": 1,
+        "fetched_at": "2026-08-23T00:00:00Z",
+        "providers": {
+            slug: {"ok": True, "error": None, "models": models}
+            for slug, models in providers.items()
+        },
+    }
+    (state / "model_catalog.json").write_text(json.dumps(payload))
+
+
+def test_composer_routes_discovered_models_per_key(monkeypatch, tmp_path):
+    import yaml
+
+    mdir = tmp_path / "models"
+    mdir.mkdir()
+    (mdir / "settings.yaml").write_text("litellm_settings:\n  callbacks: []\n")
+    monkeypatch.setattr(config, "models_dir", lambda: mdir)
+    monkeypatch.setattr(config, "state_dir", lambda: tmp_path / "state")
+    monkeypatch.setattr(config, "load_dotenv", lambda: None)  # isolate real .env
+    # earlier tests may have pulled real keys into os.environ via
+    # model_registry's own load_dotenv — scrub so key-gating is hermetic
+    from pipa.providers import PROVIDERS
+
+    for p in PROVIDERS.values():
+        for k in p.requires:
+            monkeypatch.delenv(k, raising=False)
+    _seed_cache(tmp_path / "state", {
+        "ollama": [{"id": "qwen2.5-coder:14b", "name": ""}],
+        "opencode-zen": [
+            {"id": "mimo-v2.5-free", "name": ""},
+            {"id": "deepseek-v4-flash-free", "name": ""},
+        ],
+        "kilo": [{"id": "stepfun/step-3.7-flash:free", "name": ""}],
+    })
 
     path, warning = config.compose_litellm_config(root=tmp_path)
-    text = path.read_text()
-    assert "qwen2.5-coder" in text            # local tier present
-    assert "kilo-auto/free" not in text       # kilo excluded (no key)
-    assert warning and "kilo.yaml" in warning
+    data = yaml.safe_load(path.read_text())
+    by_name = {m["model_name"]: m for m in data["model_list"]}
+    # local discovered models stay always-on...
+    assert by_name["qwen2.5-coder:14b"]["litellm_params"]["api_base"].startswith(
+        "http://localhost:11434"
+    )
+    # ...cloud free models are skipped while their key is missing...
+    assert warning and "(needs KILO_API_KEY)" in warning
+    assert "(needs OPENCODE_ZEN_API_KEY)" in warning
+    assert "stepfun/step-3.7-flash:free" not in by_name
+    assert "mimo-v2.5-free" not in by_name
+
+    # ...and route as soon as their keys are present.
+    monkeypatch.setenv("KILO_API_KEY", "x")
+    monkeypatch.setenv("OPENCODE_ZEN_API_KEY", "x")
+    path2, _ = config.compose_litellm_config(root=tmp_path)
+    data2 = yaml.safe_load(path2.read_text())
+    by_name2 = {m["model_name"]: m for m in data2["model_list"]}
+    assert by_name2["mimo-v2.5-free"]["litellm_params"]["api_base"] == "https://opencode.ai/zen/v1"
+    assert "deepseek-v4-flash-free" in by_name2
+    assert "stepfun/step-3.7-flash:free" in by_name2
     assert ".effective.yaml" in path.name
 
 
-def test_composer_upgrades_roles_when_keys_present(monkeypatch, tmp_path):
-    monkeypatch.setenv("KILO_API_KEY", "test-kilo")
-    monkeypatch.delenv("KIMI_API_KEY", raising=False)
-    monkeypatch.setattr(config, "models_dir", lambda: ROOT / "models")
+def test_thin_init_exposes_project_agents_to_opencode(tmp_path, monkeypatch):
+    """pipa init links .pipa/agents-local into opencode's discovery path."""
+    from pipa import config
 
-    import yaml
-    path, _ = config.compose_litellm_config(root=tmp_path)
-    data = yaml.safe_load(path.read_text())
-    by_name = {m["model_name"]: m for m in data["model_list"]}
-    # cloud fragment overrides the local primary alias
-    assert by_name["primary"]["litellm_params"]["api_base"].startswith("https://api.kilo.ai")
-    # kimi deep stays local (no key)
-    assert "moonshot" not in by_name["deep"]["litellm_params"].get("api_base", "")
-    assert "callbacks" in data.get("litellm_settings", {})
+    fake_home = tmp_path / "home"
+    fake_home.mkdir()
+    monkeypatch.setattr(Path, "home", lambda: fake_home)
+    # isolate the global project registry — init must not touch the real one
+    monkeypatch.setattr(config, "state_dir", lambda: tmp_path / "state")
+
+    proj = tmp_path / "proj"
+    (proj / ".git").mkdir(parents=True)
+    (proj / ".pipa" / "agents-local").mkdir(parents=True)
+    (proj / ".pipa" / "agents-local" / "jam-explorer.md").write_text("---\nname: jam-explorer\n---\n")
+
+    actions = scaffold.init_project(proj, runtime_name="deepseek-harness", root=ROOT)
+
+    link = proj / ".opencode" / "agent"
+    assert link.is_symlink() and link.resolve() == (proj / ".pipa" / "agents-local").resolve()
+    assert any("agents-local" in a for a in actions)
+    # idempotent: second run keeps it
+    scaffold.init_project(proj, runtime_name="deepseek-harness", root=ROOT)
+    assert link.is_symlink()
+
+
+def test_wire_dsh_enforces_owner_only_credentials(home, project):
+    """dsh's credentials-local plugin rejects group/world-readable files."""
+    runtime.wire_deepseek_harness(project=project, root=ROOT)
+    creds = home / ".dsh" / ".credentials.yaml"
+    assert (creds.stat().st_mode & 0o777) == 0o600
+
+    # pre-existing too-permissive file gets tightened on the next wire
+    runtime.wire_deepseek_harness(project=project, root=ROOT)
+    creds.chmod(0o644)
+    actions = runtime.wire_deepseek_harness(project=project, root=ROOT)
+    assert (creds.stat().st_mode & 0o777) == 0o600
+    assert any("600" in a for a in actions)

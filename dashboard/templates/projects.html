@@ -1,0 +1,47 @@
+{% extends "base.html" %}
+{% block title %}Projects · pipa dashboard{% endblock %}
+{% block content %}
+<h1>Projects</h1>
+<p class="dim">{{ count }} registered project(s) from <span class="mono">state/projects.json</span>.</p>
+
+{% if saved %}<div class="flash">Runtime updated.</div>{% endif %}
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+{% if projects %}
+<div class="table-wrap">
+  <table>
+    <thead>
+      <tr><th>project</th><th>path</th><th>rules</th><th>skills</th><th>memory</th><th>status</th><th>runtime</th></tr>
+    </thead>
+    <tbody>
+      {% for p in projects %}
+      <tr>
+        <td>{{ p.name }}</td>
+        <td class="mono dim path-cell">{{ p.path }}</td>
+        <td>{{ p.rules }}</td>
+        <td>{{ p.skills }}</td>
+        <td>{{ p.memory }}</td>
+        <td>{% if p.exists %}<span class="badge ok">ok</span>{% else %}<span class="badge warn">missing</span>{% endif %}</td>
+        <td>
+          <form method="post" action="/projects/runtime" class="inline-form">
+            <input type="hidden" name="path" value="{{ p.path }}">
+            <select name="runtime">
+              {% for r in runtimes %}
+              <option value="{{ r }}" {% if p.runtime == r %}selected{% endif %}>{{ r }}</option>
+              {% endfor %}
+              {% if p.runtime and p.runtime not in runtimes %}
+              <option value="{{ p.runtime }}" selected>{{ p.runtime }} (auto)</option>
+              {% endif %}
+            </select>
+            <button type="submit">Apply</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+</div>
+{% else %}
+  {% with message='No projects registered yet — run `pipa init` in a project.' %}{% include "empty_state.html" %}{% endwith %}
+{% endif %}
+{% endblock %}

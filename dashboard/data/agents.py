@@ -1,8 +1,8 @@
 """Agent discovery + per-agent model overrides.
 
-Frontmatter discovery over <harness>/agents/*.md plus the extension agent
-dirs of registered projects (.pipa/extension/agents, legacy
-.harness_extension/agents). Overrides persist at state/agent_llm_overrides.json.
+Frontmatter discovery over <harness>/agents/*.md plus the project agent
+dirs of registered projects (.pipa/agents-local, legacy extension dirs).
+Overrides persist at state/agent_llm_overrides.json.
 """
 from __future__ import annotations
 
@@ -12,6 +12,7 @@ from pathlib import Path
 from typing import Dict, List, Optional, Tuple
 
 from pipa import config
+from data import projects as projects_data
 
 OVERRIDES_FILE = "agent_llm_overrides.json"
 _FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
@@ -31,22 +32,9 @@ def parse_frontmatter(text: str) -> Tuple[dict, str]:
 
 
 def _registry_projects() -> List[Path]:
-    path = config.projects_registry_path()
-    try:
-        entries = json.loads(path.read_text())
-    except Exception:
-        return []
-    if not isinstance(entries, list):
-        return []
     out: List[Path] = []
-    for entry in entries:
-        try:
-            raw = entry.get("path") if isinstance(entry, dict) else None
-        except AttributeError:
-            raw = None
-        if not raw:
-            continue
-        project = Path(str(raw)).expanduser()
+    for entry in projects_data.registry_entries():
+        project = Path(str(entry["path"])).expanduser()
         if project.is_dir():
             out.append(project)
     return out
@@ -119,21 +107,27 @@ def save_overrides(data: dict) -> None:
     path.write_text(json.dumps(data, indent=2) + "\n")
 
 
-def set_override(agent: str, model: str) -> None:
-    """Set (non-empty model) or clear (empty model) one agent's override."""
+def set_tier_override(agent: str, tier: str) -> None:
+    """Set (non-empty tier) or clear (empty tier) one agent's tier override."""
     if not agent:
         return
     overrides = load_overrides()
-    if model.strip():
-        overrides[agent] = {"model": model.strip()}
+    if tier.strip():
+        overrides[agent] = {"tier": tier.strip()}
     else:
         overrides.pop(agent, None)
     save_overrides(overrides)
 
 
+def reset_override(agent: str) -> None:
+    """Drop one agent's override from the store (no-op when unset)."""
+    set_tier_override(agent, "")
+
+
 def override_for(agent_name: str) -> Optional[str]:
     row = load_overrides().get(agent_name) or load_overrides().get(f"agents/{agent_name}.md")
     if isinstance(row, dict):
-        model = row.get("model")
-        return str(model) if model else None
+        # New stores carry {"tier": ...}; pre-2026-08 stores {"model": ...}.
+        value = row.get("tier") or row.get("model")
+        return str(value) if value else None
     return None

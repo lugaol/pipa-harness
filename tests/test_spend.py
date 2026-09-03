@@ -116,11 +116,12 @@ def test_missing_file_never_raises(tmp_path):
     assert isinstance(spend.format_report(s), str)
 
 
-def test_default_path_env_then_home(monkeypatch):
+def test_default_path_env_then_state_dir(monkeypatch):
     monkeypatch.setenv("PIPA_SPEND_LOG", "/tmp/pipa-test-spend.ndjson")
     assert spend.default_path() == Path("/tmp/pipa-test-spend.ndjson")
     monkeypatch.delenv("PIPA_SPEND_LOG", raising=False)
-    assert spend.default_path() == Path.home() / ".pipa" / "spend.ndjson"
+    from pipa import config
+    assert spend.default_path() == config.state_dir() / "spend.ndjson"
 
 
 def test_report_and_summary_leak_no_content(ledger):

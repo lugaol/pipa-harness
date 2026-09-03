@@ -19,16 +19,16 @@ from pathlib import Path
 
 from . import config
 
-# pipa agent -> LiteLLM model alias (used when generating runtime configs)
+# pipa agent -> model tier (lowest..xhigh; used when generating runtime configs)
 AGENT_MODEL_MAP = {
-    "dev": "primary",
-    "qa": "fast",
-    "explorer": "explore",
-    "analyst": "deep",
-    "pm": "deep",
-    "architect": "deep",
-    "sm": "primary",
-    "researcher": "deep",
+    "dev": "mid",
+    "qa": "low",
+    "explorer": "lowest",
+    "analyst": "high",
+    "pm": "high",
+    "architect": "high",
+    "sm": "mid",
+    "researcher": "high",
 }
 
 RUNTIME_FILE = "runtime"
@@ -166,6 +166,25 @@ def _mcp_fragments(root: Path) -> tuple[dict, dict]:
     return servers, {f"{name}_*": "allow" for name in servers}
 
 
+def _render_dsh_models(text: str, root: Path) -> str:
+    """Replace @DSH_MODELS@ + the default model with registry-derived values."""
+    from pipa.model_registry import TIER_ALIASES, runtime_model_list, tier_resolution
+
+    lines = []
+    for m in runtime_model_list():
+        lines.append(f"          - id: {m['id']}")
+        lines.append(f"            name: {m['name']}")
+    text = text.replace("@DSH_MODELS@", "\n".join(lines))
+
+    # Default agent model = strongest tier the user actually assigned.
+    assigned = [t for t in TIER_ALIASES if t in tier_resolution()]
+    if assigned:
+        import re as _re
+
+        text = _re.sub(r"(?m)^(\s*model: )\w+$", rf"\g<1>{assigned[-1]}", text)
+    return text
+
+
 def _strip_jsonc(text: str) -> str:
     """Remove // comments (outside strings) and trailing commas."""
     import re
@@ -200,7 +219,7 @@ def _strip_jsonc(text: str) -> str:
 
 
 def render_opencode_config(root: Path) -> dict:
-    """Load the global template, inject MCP registry + permissions, substitute paths."""
+    """Load the global template, inject MCP registry + models, substitute paths."""
     import json
 
     rt_dir = root / "clis" / "opencode"
@@ -208,6 +227,21 @@ def render_opencode_config(root: Path) -> dict:
     servers, perms = _mcp_fragments(root)
     cfg["mcp"] = servers
     cfg.setdefault("permission", {}).update(perms)
+
+    from pipa.model_registry import runtime_model_list, tier_resolution, TIER_ALIASES
+
+    provider = cfg.setdefault("provider", {}).setdefault("litellm", {})
+    provider["models"] = {
+        m["id"]: {"name": m["name"]} for m in runtime_model_list()
+    }
+
+    # Default models come from user tier assignments; strongest assigned tier
+    # is the main model, weakest the small model. No assignment -> template
+    # defaults stay untouched (user configures tiers in the dashboard).
+    resolved = [t for t in TIER_ALIASES if t in tier_resolution()]
+    if resolved:
+        cfg["model"] = f"litellm/{resolved[-1]}"
+        cfg["small_model"] = f"litellm/{resolved[0]}"
 
     def walk(node):
         if isinstance(node, str):
@@ -221,8 +255,20 @@ def render_opencode_config(root: Path) -> dict:
     return walk(cfg)
 
 
+def _render_session_bus_plugin(root: Path) -> str:
+    """Session-bus plugin source with wire-time substitutions."""
+    template = root / "clis" / "opencode" / "plugin" / "pipa-session-bus.js"
+    bin_path = root / "bin" / "pipa"
+    return (
+        template.read_text()
+        .replace("@@PIPA_BIN@@", str(bin_path))
+        .replace("@@PIPA_RUNTIME@@", "opencode")
+    )
+
+
 def wire_opencode(project: Path, root: Path) -> list[str]:
-    """Global-only OpenCode wiring: ~/.config/opencode (config + shared agents).
+    """Global-only OpenCode wiring: ~/.config/opencode (config + shared agents
+    + session-bus plugin).
 
     Projects carry no opencode files — the global config's instruction globs
     pick up each project's AGENTS.md and .pipa/rules/*.md at launch time.
@@ -243,6 +289,20 @@ def wire_opencode(project: Path, root: Path) -> list[str]:
         gcfg.write_text(json.dumps(render_opencode_config(root), indent=2) + "\n")
         actions.append(f"+ wrote {gcfg}")
     _symlink(root / "agents", gdir / "agent", actions)
+
+    # session bus: auto-discovered plugin forwards events via `pipa hook`.
+    # Create-only: an existing file (user's or ours) is never overwritten —
+    # delete it to get a fresh render.
+    plugin_src = gdir / "plugin" / "pipa-session-bus.js"
+    plugin_template = root / "clis" / "opencode" / "plugin" / "pipa-session-bus.js"
+    if not plugin_template.exists():
+        actions.append(f"!! missing session-bus plugin template {plugin_template}")
+    elif plugin_src.exists():
+        actions.append(f"~ kept existing {plugin_src}")
+    else:
+        plugin_src.parent.mkdir(parents=True, exist_ok=True)
+        plugin_src.write_text(_render_session_bus_plugin(root))
+        actions.append(f"+ wrote {plugin_src} (session bus → pipa hook)")
     return actions
 
 
@@ -263,6 +323,7 @@ def wire_deepseek_harness(project: Path, root: Path) -> list[str]:
         return actions
 
     text = template.read_text().replace("@LITELLM_URL@", config.LITELLM_URL)
+    text = _render_dsh_models(text, root)
 
     dsh_home = Path.home() / ".dsh"
     patch = dsh_home / "cordis.patch.yml"
@@ -285,6 +346,11 @@ def wire_deepseek_harness(project: Path, root: Path) -> list[str]:
         actions.append(
             f"~ add 'LITELLM_API_KEY: {config.LITELLM_KEY}' under refs in {creds}"
         )
+    # dsh's credentials-local plugin hard-requires owner-only permissions;
+    # enforce on every wire so both fresh and pre-existing files comply.
+    if creds.exists() and (creds.stat().st_mode & 0o077):
+        creds.chmod(0o600)
+        actions.append(f"~ tightened {creds} -> 600")
     return actions
 
 

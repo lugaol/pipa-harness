@@ -1,0 +1,27 @@
+{% if entries %}
+<table>
+  <thead><tr><th>title</th><th>path</th><th>size</th><th>modified</th><th>actions</th></tr></thead>
+  <tbody>
+    {% for e in entries %}
+    <tr>
+      <td>{{ e.title }}</td>
+      <td class="mono dim path-cell">{{ e.path_rel }}</td>
+      <td class="dim nowrap">{{ e.size_h }}</td>
+      <td class="dim nowrap">{{ e.mtime_h }}</td>
+      <td class="nowrap">
+        <a href="/context/edit?tier={{ tier }}&amp;tab={{ tab }}&amp;path={{ e.path_rel }}">Edit</a>
+        <form method="post" action="/context/delete" class="inline-form"
+              onsubmit="return confirm('Delete {{ e.path_rel }}?')">
+          <input type="hidden" name="tier" value="{{ tier }}">
+          <input type="hidden" name="tab" value="{{ tab }}">
+          <input type="hidden" name="path" value="{{ e.path_rel }}">
+          <button type="submit" class="danger">Delete</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+  {% with message='No ' + tab + ' entries in this scope yet — create one above.' %}{% include "empty_state.html" %}{% endwith %}
+{% endif %}

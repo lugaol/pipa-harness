@@ -9,7 +9,7 @@ from fastapi import APIRouter, Request
 
 from pipa import config
 
-from . import render, form_fields
+from . import render
 
 router = APIRouter()
 
@@ -72,7 +72,9 @@ def evals_view(request: Request):
 
 
 @router.post("/api/evals/run")
-async def evals_run(request: Request):
+def evals_run(request: Request):
+    # sync def → FastAPI offloads the 60s subprocess to the threadpool,
+    # keeping the event loop (and /api/health) responsive
     global _LAST
     try:
         _LAST = run_evals()

@@ -1,7 +1,8 @@
-"""Project registry reader with lightweight per-project enrichment.
+"""Project registry: the single reader for state/projects.json.
 
-Reads state/projects.json (written by pipa.config.register_project) and
-adds runtime + rules/skills/memory counts under each project's .pipa/.
+registry_entries() is THE raw reader every other module must use
+(context, agents). list_projects() adds runtime + rules/skills/memory
+counts under each project's .pipa/.
 """
 from __future__ import annotations
 
@@ -10,6 +11,43 @@ from pathlib import Path
 from typing import List
 
 from pipa import config
+from pipa.runtime import names as runtime_names
+
+
+def registry_entries() -> List[dict]:
+    """Raw [{path, runtime}] rows; missing/corrupt registry → []."""
+    path = config.projects_registry_path()
+    try:
+        entries = json.loads(path.read_text())
+    except Exception:
+        return []
+    if not isinstance(entries, list):
+        return []
+    return [
+        e for e in entries
+        if isinstance(e, dict) and e.get("path")
+    ]
+
+
+def set_runtime(path_str: str, runtime: str) -> tuple[bool, str]:
+    """Write <proj>/.pipa/runtime + re-register — path must be in the registry."""
+    known = {p["path"] for p in list_projects()}
+    if path_str not in known:
+        return False, "path not in project registry"
+    if runtime not in runtime_names():
+        return False, f"runtime must be one of: {', '.join(runtime_names())}"
+    project = Path(path_str)
+    marker = config.pipa_dir(project) / config.RUNTIME_MARKER
+    try:
+        marker.parent.mkdir(parents=True, exist_ok=True)
+        marker.write_text(runtime + "\n")
+    except OSError as exc:
+        return False, f"could not write runtime marker: {exc}"
+    try:
+        config.register_project(project, runtime)
+    except Exception as exc:
+        return False, f"could not update registry: {exc}"
+    return True, ""
 
 
 def _read_runtime(project: Path) -> str:
@@ -67,15 +105,4 @@ def _enrich(entry: dict) -> dict:
 
 def list_projects() -> List[dict]:
     """Registered projects enriched; missing/corrupt registry → []."""
-    path = config.projects_registry_path()
-    try:
-        entries = json.loads(path.read_text())
-    except Exception:
-        return []
-    if not isinstance(entries, list):
-        return []
-    out: List[dict] = []
-    for entry in entries:
-        if isinstance(entry, dict) and entry.get("path"):
-            out.append(_enrich(entry))
-    return out
+    return [_enrich(entry) for entry in registry_entries()]

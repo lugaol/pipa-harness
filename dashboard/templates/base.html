@@ -5,15 +5,93 @@
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>{% block title %}pipa dashboard{% endblock %}</title>
   <link rel="stylesheet" href="/static/style.css">
-  <style>
-    /* fallback inline vars in case /static is unavailable */
-    :root { --bg:#0f1117; --panel:#171a23; --border:#262b38; --text:#e6e9ef; --dim:#8b93a5; }
-  </style>
 </head>
 <body>
-  {% include "nav.html" %}
-  <main class="content">
+<div class="app-layout">
+  <aside class="sidebar" role="navigation" aria-label="Main navigation">
+    <div class="sidebar-brand">
+      <div class="sidebar-logo">&pi;</div>
+      <div class="sidebar-brand-text">
+        <h1>pipa_harness</h1>
+        <p>operations console</p>
+      </div>
+    </div>
+
+    <nav class="nav-section">
+      <div class="nav-label">Overview</div>
+      <a class="nav-item" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Status</a>
+      <a class="nav-item" href="/sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Sessions</a>
+      <a class="nav-item" href="/spend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Spend</a>
+    </nav>
+
+    <nav class="nav-section">
+      <div class="nav-label">Models &amp; Knowledge</div>
+      <a class="nav-item" href="/models"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>LLM Models</a>
+      <a class="nav-item" href="/context"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>Context</a>
+      <a class="nav-item" href="/memory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>Memory</a>
+      <a class="nav-item" href="/graph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="7.5" y1="8" x2="10.5" y2="15.5"/><line x1="16.5" y1="8" x2="13.5" y2="15.5"/><line x1="8" y1="6" x2="16" y2="6"/></svg>Graph</a>
+    </nav>
+
+    <nav class="nav-section">
+      <div class="nav-label">Project</div>
+      <a class="nav-item" href="/projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Projects</a>
+      <a class="nav-item" href="/agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Agents</a>
+      <a class="nav-item" href="/evals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Evals</a>
+    </nav>
+
+    <div class="sidebar-footer">
+      <div class="status-pill">
+        <span class="status-dot online" id="global-status-dot"></span>
+        <span id="global-status-text">Checking&hellip;</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main-content content">
     {% block content %}{% endblock %}
   </main>
+</div>
+<script>
+  // multi-page: highlight the active nav item by pathname
+  (function () {
+    var path = location.pathname === "/" ? "/" : location.pathname.replace(/\/$/, "");
+    document.querySelectorAll(".nav-item[href]").forEach(function (a) {
+      var href = a.getAttribute("href");
+      a.classList.toggle("active", href === path || (href !== "/" && path.indexOf(href) === 0));
+    });
+  })();
+  // sidebar health pill: fetch once, then poll so it never goes stale
+  (function () {
+    var dot = document.getElementById("global-status-dot");
+    var text = document.getElementById("global-status-text");
+    function refresh() {
+      fetch("/api/health").then(function (r) { return r.json(); }).then(function (h) {
+        var up = h.gateway && h.ollama;
+        dot.classList.toggle("online", !!up);
+        dot.classList.toggle("offline", !up);
+        text.textContent = up ? "All services up" :
+          (h.gateway ? "ollama down" : (h.ollama ? "gateway down" : "services down"));
+      }).catch(function () {
+        dot.classList.add("offline");
+        text.textContent = "unreachable";
+      });
+    }
+    refresh();
+    setInterval(refresh, 15000);
+  })();
+  // long actions (gateway restart, evals): disable the clicked button and
+  // show progress so the POST doesn't look hung
+  document.addEventListener("submit", function (ev) {
+    var btn = ev.target.querySelector("button[type=submit]");
+    if (!btn || ev.target.dataset.noSpin) return;
+    btn.disabled = true;
+    btn.dataset.label = btn.textContent;
+    btn.textContent = "Working…";
+    setTimeout(function () { // safety net if navigation is blocked
+      btn.disabled = false;
+      if (btn.dataset.label) btn.textContent = btn.dataset.label;
+    }, 30000);
+  }, true);
+</script>
 </body>
 </html>

@@ -1,34 +1,127 @@
 {% extends "base.html" %}
 {% block title %}Memory · pipa dashboard{% endblock %}
 {% block content %}
-<h1>Memory recall</h1>
+<h1>Memory</h1>
+<p class="dim">
+  Vault notes with expiry-aware ranking. Recall fans out over
+  <span class="mono">memory.db</span>, vault markdown and the code graph.
+</p>
 
-<form method="get" action="/memory" class="filter-bar">
-  <input type="text" name="q" value="{{ q }}" placeholder="query across memory-db, vault, code-graph…" autofocus>
-  <button type="submit">Search</button>
-</form>
+{% if saved %}<div class="flash">Saved.</div>{% endif %}
+{% if deleted %}<div class="flash">Deleted.</div>{% endif %}
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
 
-{% if error %}
-  {% with message='Recall failed — check memory index and vault paths.' %}{% include "empty_state.html" %}{% endwith %}
-{% elif searched and not hits %}
-  {% with message='No hits for this query.' %}{% include "empty_state.html" %}{% endwith %}
-{% endif %}
-
-<div class="cards">
-  {% for h in hits %}
-  <div class="card agent-card">
-    <div class="stat-label">
-      {{ h.title }}
-      {% if h.expired %}<span class="badge expired">EXPIRED</span>{% endif %}
-    </div>
-    <p class="agent-desc mono">{{ h.detail }}</p>
-    <div class="chip-row">
-      <span class="badge">{{ h.source }}</span>
-      <span class="badge dim-badge">score {{ '%.1f'.format(h.score) }}</span>
-      {% if h.valid_until %}<span class="badge dim-badge">valid_until {{ h.valid_until }}</span>{% endif %}
-    </div>
-    {% if h.path %}<p class="dim mono path-cell">{{ h.path }}</p>{% endif %}
-  </div>
-  {% endfor %}
+<div class="filter-bar">
+  <span class="dim">Scope:</span>
+  <span class="tier-switch">
+    <a href="/memory?scope=global" {% if scope == 'global' %}class="active"{% endif %}>Harness vault</a>
+    <a href="/memory?scope=project" {% if scope == 'project' %}class="active"{% endif %}>Project memory</a>
+  </span>
+  {% if scope == 'project' and projects %}
+  <form method="get" action="/memory" class="picker">
+    <input type="hidden" name="scope" value="project">
+    <select name="proj" onchange="this.form.submit()">
+      {% for p in projects %}<option value="{{ p['path'] }}" {% if p['path'] == proj %}selected{% endif %}>{{ p['path'].rsplit('/',1)[-1] }}</option>{% endfor %}
+    </select>
+    <noscript><button type="submit">Go</button></noscript>
+  </form>
+  {% endif %}
 </div>
+
+<section class="panel">
+  <h2>Recall</h2>
+  <form method="get" action="/memory" class="filter-bar">
+    <input type="hidden" name="scope" value="{{ scope }}">
+    {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+    <input type="text" name="q" value="{{ q }}" placeholder='try: "why did we choose X"…'>
+    <button type="submit">Search</button>
+  </form>
+  {% if recall_error %}
+    {% with message='Recall failed — check memory index and vault paths.' %}{% include "empty_state.html" %}{% endwith %}
+  {% elif searched and not hits %}
+    {% with message='No hits for this query.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endif %}
+  <div class="cards">
+    {% for h in hits %}
+    <div class="card agent-card">
+      <div class="stat-label">
+        {{ h.title }}
+        {% if h.expired %}<span class="badge expired">EXPIRED</span>{% endif %}
+      </div>
+      <p class="agent-desc mono">{{ h.detail }}</p>
+      <div class="chip-row">
+        <span class="badge">{{ h.source }}</span>
+        <span class="badge dim-badge">score {{ '%.1f'.format(h.score) }}</span>
+        {% if h.valid_until %}<span class="badge dim-badge">valid_until {{ h.valid_until }}</span>{% endif %}
+      </div>
+      {% if h.path %}<p class="dim mono path-cell">{{ h.path }}</p>{% endif %}
+    </div>
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <div class="panel-head">
+    <h2>Notes {% if expired_count %}<span class="badge expired">{{ expired_count }} expired</span>{% endif %}</h2>
+    <form method="get" action="/memory/edit" class="inline-form">
+      <input type="hidden" name="scope" value="{{ scope }}">
+      {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+      <input type="hidden" name="path" value="new">
+      <input type="text" name="name" placeholder="note-name or decisions/note-name" required>
+      <button type="submit">New note</button>
+    </form>
+  </div>
+
+  {% for group_name, rows in groups %}
+  <h3 class="dim mono">{{ group_name }}</h3>
+  <table>
+    <thead><tr><th>note</th><th>path</th><th>expiry</th><th>size</th><th>modified</th><th>actions</th></tr></thead>
+    <tbody>
+      {% for n in rows %}
+      <tr>
+        <td>{{ n.title }}</td>
+        <td class="mono dim path-cell">{{ n.path_rel }}{% if n.readonly %} <span class="badge dim-badge">legacy</span>{% endif %}</td>
+        <td class="nowrap">
+          {% if n.expired %}<span class="badge expired">expired {{ n.valid_until }}</span>
+          {% elif n.valid_until %}<span class="badge ok">until {{ n.valid_until }}</span>
+          {% else %}<span class="dim">—</span>{% endif %}
+        </td>
+        <td class="dim nowrap">{{ n.size_h }}</td>
+        <td class="dim nowrap">{{ n.mtime_h }}</td>
+        <td class="nowrap">
+          {% if not n.readonly %}
+          <a href="/memory/edit?scope={{ scope }}{% if proj %}&amp;proj={{ proj }}{% endif %}&amp;path={{ n.path_rel }}">Edit</a>
+          <form method="post" action="/memory/expiry" class="inline-form">
+            <input type="hidden" name="tier" value="{{ scope }}">
+            <input type="hidden" name="path" value="{{ n.path_rel }}">
+            {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+            <button type="submit" name="action" value="extend"
+                    title="keep active for another year">+1y</button>
+            {% if n.valid_until %}
+            <button type="submit" name="action" value="clear"
+                    title="remove valid_until constraint">Clear</button>
+            {% else %}
+            <button type="submit" name="action" value="expire"
+                    class="secondary" title="mark expired now">Expire</button>
+            {% endif %}
+          </form>
+          <form method="post" action="/memory/delete" class="inline-form"
+                onsubmit="return confirm('Delete {{ n.path_rel }}?')">
+            <input type="hidden" name="tier" value="{{ scope }}">
+            <input type="hidden" name="path" value="{{ n.path_rel }}">
+            {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+            <button type="submit" class="danger">Delete</button>
+          </form>
+          {% else %}
+          <span class="dim" title="legacy layout — run `pipa migrate` to make editable">read-only</span>
+          {% endif %}
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  {% else %}
+    {% with message='No notes in this scope yet — create one above.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endfor %}
+</section>
 {% endblock %}

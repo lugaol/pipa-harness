@@ -1,15 +1,14 @@
 ---
-model: litellm/deep
 description: Deep research — papers, benchmarks, API docs, external library behavior. Writes a vault note and returns a 5-line summary.
 mode: subagent
-model: litellm/deep
+model: litellm/high
 permission:
   edit: allow
   bash:
     "*": deny
     "graphify *": allow
-    "git push": approval
-    "git commit": approval
+    "git push": ask
+    "git commit": ask
   webfetch: allow
   websearch: allow
   external_directory: allow

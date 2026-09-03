@@ -11,7 +11,7 @@ File-driven context passing (`specs/` → stories). Lean by default.
 ## Stack
 - **Runtimes** — OpenCode or DeepSeek Harness (agent runner; see `clis/`)
 - **pipa CLI** — `bin/pipa` (Python, `pipa/` package): init, up, stop, status, runtime, migrate, hook, eval
-- **LiteLLM** — model gateway `:4000`; aliases in `models/{local,cloud}/*.yaml` fragments composed into `models/.effective.yaml` (shared by all runtimes)
+- **LiteLLM** — model gateway `:4000`; model lists discovered live from providers (cached in `state/model_catalog.json`) and composed into `models/.effective.yaml` (shared by all runtimes)
 - **graphify** — persistent codebase graph; query BEFORE grep
 - **Obsidian** — vault memory in `vault/`
 
@@ -43,8 +43,12 @@ Agents MUST request explicit approval for irreversible or outward-facing actions
 - External data exfiltration — requires approval
 - `eval()`, `exec()`, `Function()` on untrusted input — forbidden (HARD)
 
+In OpenCode frontmatter these are expressed as `"git push": ask` /
+`"git commit": ask` — OpenCode permission actions are only
+`allow | ask | deny`, and `ask` IS the approval gate.
+
 ## Conflict priority
-turn instruction > AGENTS.md > project extension > base rules/ > skills/ > vault
+turn instruction > AGENTS.md > project overlay (.pipa/) > base rules/ > skills/ > vault
 User skills win over built-in skills on format.
 
 ## Two-phase workflow
@@ -80,10 +84,12 @@ Build: `@dev` `@qa`
 Utility: `@explorer` `@researcher`
 Definitions in `agents/*.md`. Invoke with `@name` in OpenCode.
 
-## Project extensions
-`.pipa/extension/` carries project-specific rules/skills/agents (scaffolded by
-`pipa init`; legacy `.harness_extension/` projects migrate with `pipa migrate`).
-Conflict priority: extension > base.
+## Project overlay
+Projects carry their own context in a thin `.pipa/` overlay (AGENTS.md,
+rules/, memory/, skills/, agents-local/, state/) scaffolded by `pipa init`.
+The legacy `.pipa/extension/` and `.harness_extension/` layouts are still read
+for compatibility but created by nothing; `pipa migrate` converts them.
+Conflict priority: project overlay (.pipa/) > base.
 
 ## Knowledge graph
 `graphify query "<q>"`, `graphify path "A" "B"`, `graphify explain "X"`.
@@ -126,20 +132,22 @@ manual greps when hunting prior decisions.
 
 ## Model orchestration
 All calls go through LiteLLM aliases — never call providers directly.
+Tiers are user-assigned in the dashboard (Models page); agents pick a tier.
 | Alias | Use for | Token cost |
 |-------|---------|------------|
-| `fast` | Triage, QA verdicts, summaries | Low |
-| `primary` | Implementation, dev agent, supervisor | Medium-High |
-| `deep` | Research, planning, architect | High |
-| `explore` | Read-only codebase Q&A | Lowest |
+| `lowest` | Read-only codebase Q&A, triage | Lowest |
+| `low` | Triage, QA verdicts, summaries | Low |
+| `mid` | Implementation, dev agent, supervisor | Medium-High |
+| `high` | Research, planning, architect | High |
+| `xhigh` | Hardest reasoning, long-horizon work | Highest |
 Scripts: `tools/litellm/task.sh <alias> "<prompt>"`.
 
 ### Token-saving rules
 - Delegate search to `@explorer` instead of reading files.
 - Use `@qa` for binary verdicts, not reasoning.
-- Reserve `primary` for code/decisions/coordination.
-- Reserve `deep` for multi-source reasoning only.
-- Never run `deep` for simple lookups.
+- Reserve `mid`+ for code/decisions/coordination.
+- Reserve `high`/`xhigh` for multi-source reasoning only.
+- Never run `xhigh` for simple lookups.
 
 ## Context compaction
 - **Budget:** Keep agent context under 50% of the model's window. The rest is reserved for the user message + tool results.
@@ -178,10 +186,10 @@ with:
 ## Harness usage
 - Agents used: @explorer, @dev, @qa
 - Skills loaded: debugging, code-review
-- Rules applied: audio-ndk (HARD), testing (HARD)
+- Rules applied: security (HARD), testing (HARD)
 - Tools used: graphify query, grep, git diff
 - Orchestration: sequential (explorer → dev → qa), 1 parallel task
-- Model routing: explore (cheapest) for search, primary for implementation, fast for verification
+- Model routing: lowest (cheapest) for search, mid for implementation, low for verification
 ```
 
 ## ask_user tool
@@ -214,8 +222,8 @@ Rule: keep exactly one `in_progress` while work remains.
 `AGENTS.md` (router) · `pipa/` (Python CLI + core lib) · `clis/` (per-runtime
 config + templates: opencode, deepseek-harness) · `rules/` (path-scoped) ·
 `skills/` (trigger-loaded) · `agents/` (subagents) · `specs/` (plan→story) ·
-`bin/pipa` (entrypoint) · `models/` (LiteLLM fragments + settings, composed
-to `.effective.yaml`) · `mcp/` (integration registry, one folder per server)
+`bin/pipa` (entrypoint) · `models/` (LiteLLM settings; model lists discovered
+from providers into state/, composed to `.effective.yaml`) · `mcp/` (integration registry, one folder per server)
 · `dashboard/` (modular pages+fragments UI) · `install/` (Makefile + steps)
 · `tools/` (evals, litellm, memory_store, ollama) · `vault/` (memory) ·
 `state/` (session, ledger, registry; gitignored) · `graphify-out/` (gitignored)
@@ -223,10 +231,8 @@ to `.effective.yaml`) · `mcp/` (integration registry, one folder per server)
 Per-project layout (created by `pipa init`, thin overlay only):
 `.pipa/runtime` (selected runtime) · `.pipa/AGENTS.md` (project facts,
 symlinked from root) · `.pipa/rules/` · `.pipa/memory/` · `.pipa/skills/`
-(optional, overrides global) · `.pipa/state/` — runtime configs are
-machine-global and never live in projects.
-
-Per-project layout (created by `pipa init`):
-`.pipa/runtime` (selected runtime) · `.pipa/extension/` (project rules/skills/
-agents) · `.pipa/state/` (session log, traces, memory.db) · `.pipa/<runtime>/`
-(generated runtime config, gitignored) · `AGENTS.md` → `.pipa/extension/AGENTS.md`
+(optional, overrides global) · `.pipa/agents-local/` (project agents, exposed
+to opencode via symlink) · `.pipa/state/` (session log, traces, memory.db;
+gitignored) — runtime configs are machine-global and never live in projects.
+Legacy `.pipa/extension/` and `.harness_extension/` layouts are still read for
+compatibility; `pipa migrate` converts them.

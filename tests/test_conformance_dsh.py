@@ -2,9 +2,11 @@
 
 Encodes real dsh schema rules: a flat list of loader entries targeting rows
 by id, one OpenAI-compatible route per provider, env-based API keys (a bare
-`apiKey` key is forbidden), and LiteLLM compat flags (no developer role, no
-max_completion_tokens).
+`apiKey` is forbidden), and LiteLLM compat flags (no developer role, no
+max_completion_tokens). Models are injected from the discovery cache —
+never static.
 """
+import json
 import re
 from pathlib import Path
 
@@ -15,15 +17,42 @@ from pipa import config
 
 ROOT = Path(__file__).resolve().parents[1]
 TEMPLATE = ROOT / "clis" / "deepseek-harness" / "cordis.patch.yml"
-CORE_ALIASES = {"primary", "fast", "deep", "explore"}
+CORE_ALIASES = {"qwen2.5-coder:14b"}
+
+
+def _seed_cache(state: Path) -> None:
+    payload = {
+        "version": 1,
+        "fetched_at": "2026-08-23T00:00:00Z",
+        "providers": {
+            "ollama": {"ok": True, "error": None, "models": [
+                {"id": "qwen2.5-coder:14b", "name": ""},
+                {"id": "qwen2.5-coder:7b", "name": ""},
+                {"id": "llama-4-coder:latest", "name": "Llama 4 Coder"},
+            ]},
+        },
+    }
+    state.mkdir(parents=True, exist_ok=True)
+    (state / "model_catalog.json").write_text(json.dumps(payload))
 
 
 @pytest.fixture(scope="module")
-def entries() -> list[dict]:
-    # The raw template holds @LITELLM_URL@, which is not YAML-safe; parse it
-    # the way wire_deepseek_harness consumes it: after placeholder rendering.
-    rendered = TEMPLATE.read_text().replace("@LITELLM_URL@", config.LITELLM_URL)
-    data = yaml.safe_load(rendered)
+def entries(tmp_path_factory) -> list[dict]:
+    # The raw template holds @LITELLM_URL@ / @DSH_MODELS@, neither YAML-safe;
+    # parse it the way wire_deepseek_harness consumes it: after rendering,
+    # against a seeded discovery cache (never the real one, never the wire).
+    from pipa.runtime import _render_dsh_models
+
+    state = tmp_path_factory.mktemp("dsh-state")
+    _seed_cache(state)
+    mp = pytest.MonkeyPatch()
+    mp.setattr(config, "state_dir", lambda: state)
+    try:
+        rendered = TEMPLATE.read_text().replace("@LITELLM_URL@", config.LITELLM_URL)
+        rendered = _render_dsh_models(rendered, ROOT)
+        data = yaml.safe_load(rendered)
+    finally:
+        mp.undo()
     assert isinstance(data, list), "patch must be a flat list of loader entries"
     return data
 

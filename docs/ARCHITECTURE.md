@@ -10,15 +10,16 @@ facts and state.
 CONTRACT   AGENTS.md  rules/*.md  skills/*/SKILL.md  agents/*.md  specs/
            Pure markdown. Any runtime can consume it. This is the API.
 
-RUNTIMES   clis/opencode/{global.jsonc,extension}     -> ~/.config/opencode/opencode.jsonc
+RUNTIMES   clis/opencode/global.jsonc         -> ~/.config/opencode/opencode.jsonc
            clis/deepseek-harness/cordis.patch.yml      -> ~/.dsh/cordis.patch.yml (+ .credentials.yaml)
            Templates rendered once per machine by `pipa up` / wire step.
            Projects hold NO runtime config — switching is `pipa runtime set <name>`.
 
-LLM        models/local/*.yaml + models/cloud/*.yaml + models/settings.yaml
+LLM        providers discovered live (pipa/providers.py) -> state/model_catalog.json
+           + user tier assignments (dashboard Models page) + models/settings.yaml
              --compose--> models/.effective.yaml --> LiteLLM proxy :4000
-           Aliases: fast | primary | deep | explore. Cloud fragments activate
-           only when their `requires:` env key exists; local Ollama is fallback.
+           Aliases: lowest | low | mid | high | xhigh, user-assigned per tier.
+           Static input is settings.yaml only; nothing else is hardcoded.
 
 MEMORY     vault/ (install-wide, dated as_of/valid_until)
            .pipa/memory/{decisions,research}/ (project-first)
@@ -49,9 +50,10 @@ Install root: `$PIPA_ROOT` > directory containing the `pipa` package (checkout) 
    `<project>/.pipa/state/session.log.ndjson` (schema:
    [SESSION_BUS.md](SESSION_BUS.md)). Consumers: `pipa status`, dashboard
    sessions page, `pipa replay` / `pipa diff`, evals, future tooling.
-2. **Model composer.** At wire time `pipa.config.compose_litellm_config` merges
-   `models/local/*` + enabled `models/cloud/*` + `settings.yaml` into
-   `models/.effective.yaml`; the LiteLLM proxy consumes it and its spend
+2. **Model composer.** `pipa.config.compose_litellm_config` merges the live
+   provider catalog (`state/model_catalog.json`, refreshed by
+   `pipa.providers`) with user tier assignments and `models/settings.yaml`
+   into `models/.effective.yaml`; the LiteLLM proxy consumes it and its spend
    callback appends metadata-only rows to `state/spend.ndjson`.
 3. **Wire-time merges.** Rendering a runtime merges (a) the `clis/<name>`
    template, (b) every enabled `mcp/<name>/config.json` block plus generated
@@ -64,7 +66,7 @@ Install root: `$PIPA_ROOT` > directory containing the `pipa` package (checkout) 
 |------|------|
 | `AGENTS.md`, `rules/`, `skills/`, `agents/` | contract markdown consumed by any runtime |
 | `clis/<runtime>/` | template + wire entry per runtime |
-| `models/` | LiteLLM fragments + composer inputs; `.effective.yaml` is generated |
+| `models/` | LiteLLM settings.yaml (static); `.effective.yaml` generated from live discovery + tiers |
 | `mcp/<name>/` | MCP integration registry (enabled flag + verbatim server block) |
 | `tools/` | evals, litellm helpers, memory_store indexer/query, ollama, tracing |
 | `dashboard/` | FastAPI app; pages/ modules, fragments/, templates/, static/ |
@@ -78,7 +80,7 @@ Install root: `$PIPA_ROOT` > directory containing the `pipa` package (checkout) 
 | Want to... | Do this |
 |------------|---------|
 | add a runtime | create `clis/<name>/` with a template + wire entry; register it in the runtime table |
-| add a model provider | drop `models/cloud/<provider>.yaml` with a `requires:` env key; composer handles the rest |
+| add a model provider | add it to live discovery in `pipa/providers.py`; assign its model per tier on the dashboard Models page |
 | add an integration | drop `mcp/<name>/config.json`; merged at next wire |
 | add a skill | `skills/<name>/SKILL.md` globally or `.pipa/skills/<name>/` per project (wins on name clash) |
 | add a rule | `rules/<topic>.md` (global) or `.pipa/rules/` (project); attach via path scope |

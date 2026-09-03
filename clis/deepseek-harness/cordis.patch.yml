@@ -14,7 +14,7 @@
 - id: agent-default-model
   config:
     provider: litellm
-    model: primary
+    model: mid
 
 - id: llm-pi-ai
   config:
@@ -33,7 +33,4 @@
           supportsDeveloperRole: false
           maxTokensField: max_tokens
         models:
-          - id: primary
-          - id: fast
-          - id: deep
-          - id: explore
+@DSH_MODELS@

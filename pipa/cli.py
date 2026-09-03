@@ -4,6 +4,8 @@
   pipa up [--runtime R] [--no-pull] [--no-apps]   install tools, start services
   pipa stop                            stop services started by pipa
   pipa status [--json]                 health check (gate-friendly exit code)
+  pipa install <component...>          selective install (uv ollama litellm
+                                       graphify dsh opencode apps | all)
   pipa runtime list|show|set <name>    inspect/switch the project runtime
   pipa migrate                         legacy .harness_extension/ -> .pipa/
   pipa hook <event> [args...]          append to the shared NDJSON session log
@@ -68,6 +70,32 @@ def cmd_init(args) -> int:
 def cmd_up(args) -> int:
     root = config.harness_root()
     rep = services.Reporter("up")
+
+    # Model lists are dynamic — discover from providers before composing.
+    try:
+        from pipa.providers import refresh as discover_models
+
+        summary = discover_models(timeout=6)
+        found = sum(len(p.get("models") or []) for p in summary["providers"].values())
+        failed = [s for s, p in summary["providers"].items() if not p.get("ok")]
+        rep.ok(f"discovered {found} models from providers" + (
+            f" (unreachable: {', '.join(failed)})" if failed else ""))
+    except Exception as e:  # noqa: BLE001 — never block `pipa up` on discovery
+        rep.warn(f"model discovery failed ({e}); using last known catalog")
+
+    # First-run convenience: give every tier a working default so runtimes
+    # and agent frontmatter resolve immediately. User-owned afterwards.
+    try:
+        from pipa.model_registry import seed_default_tiers
+
+        seeded = seed_default_tiers()
+        if seeded:
+            rep.ok("seeded default tier assignments (change on dashboard Models page)")
+            for tier, alias in sorted(seeded.items()):
+                _say(f"       {tier:<7} -> {alias}")
+    except Exception:
+        pass
+
     litellm_cfg, warn = config.pick_litellm_config(root)
     if warn:
         rep.warn(warn)
@@ -118,12 +146,57 @@ def cmd_up(args) -> int:
     _say("")
     _say("Verifying...")
     cmd_status(args)
+    readiness = _readiness(root, rt_name)
+    if readiness:
+        _say("")
+        _say("Readiness:")
+        for ok, label in readiness:
+            mark = "✓" if ok else "✗"
+            _say(f"  [{mark}] {label}")
+        if not all(ok for ok, _ in readiness):
+            _say("  Fix ✗ rows above, then re-run `pipa up`.")
     _say("")
     _say("Done.")
     if dashboard_up:
         _say(f"  Dashboard: http://localhost:{config.DASHBOARD_PORT}")
     _say(f"  Logs: {config.state_dir()}/litellm.log · {config.state_dir()}/ollama.log    Stop: pipa stop")
     return 0
+
+
+def _readiness(root: Path, rt_name: str) -> list[tuple[bool, str]]:
+    """`pipa up` closing checklist — what works now, what needs a human."""
+    out: list[tuple[bool, str]] = []
+    try:
+        from pipa.model_registry import tier_assignments
+
+        tiers = tier_assignments()
+        out.append((bool(tiers),
+                    f"tier aliases assigned ({', '.join(sorted(tiers)) or 'NONE — agents cannot pick models'})"))
+    except Exception:
+        pass
+    try:
+        from urllib.request import Request, urlopen
+
+        req = Request(f"{config.LITELLM_URL}/v1/models",
+                      headers={"Authorization": f"Bearer {config.LITELLM_KEY}"})
+        with urlopen(req, timeout=5):
+            gateway = True
+    except Exception:
+        gateway = False
+    out.append((gateway, f"gateway serving at {config.LITELLM_URL}"))
+    project = config.git_root()
+    graph = (project or root) / "graphify-out" / "graph.json"
+    if not graph.is_file():
+        graph = root / "graphify-out" / "graph.json"
+    out.append((graph.is_file(),
+                "code graph indexed"
+                + ("" if graph.is_file() else f" — run: cd {(project or root)} && graphify index .")))
+    if rt_name == "opencode":
+        plugin = Path.home() / ".config" / "opencode" / "plugin" / "pipa-session-bus.js"
+        out.append((plugin.is_file(),
+                    "session bus wired (opencode plugin)"
+                    + ("" if plugin.is_file() else " — re-run `pipa runtime set opencode`")))
+    return out
 
 
 def cmd_stop(args) -> int:
@@ -382,11 +455,13 @@ def cmd_diff(args) -> int:
     rows = [
         ("events", pa["events"], pb["events"]),
         ("duration_s", round(pa["dur"], 1), round(pb["dur"], 1)),
-        ("tokens", pa["tokens"] or "-", pb["tokens"] or "-"),
+        ("tokens", pa["tokens"], pb["tokens"]),
     ]
     for name, va, vb in rows:
-        mark = "=" if va == vb else ("A" if vb < va or isinstance(va, str) else "B")
-        _say(f"  {name:<12} A={va!s:<12} B={vb!s:<12} -> {mark}")
+        va_s = str(va) if va != "" else "-"
+        vb_s = str(vb) if vb != "" else "-"
+        mark = "=" if va == vb else ("A" if vb < va else "B")
+        _say(f"  {name:<12} A={va_s:<12} B={vb_s:<12} -> {mark}")
     only_a = sorted(pa["tools"] - pb["tools"])
     only_b = sorted(pb["tools"] - pa["tools"])
     _say(f"  tools only-A {only_a or '-'} · only-B {only_b or '-'}")
@@ -421,14 +496,11 @@ def cmd_recall(args) -> int:
 # ── spend ledger ────────────────────────────────────────────────────────────
 
 def cmd_spend(args) -> int:
-    from .spend import summarize, format_report
+    from .spend import summarize, format_report, default_path
     path = (
         Path(args.log).expanduser() if getattr(args, "log", None)
-        else None
+        else default_path()
     )
-    if path is None:
-        candidate = config.state_dir() / "spend.ndjson"
-        path = candidate if candidate.exists() else None
     summary = summarize(path, since=args.since)
     if args.json:
         print(json.dumps(summary, indent=2))

@@ -1,8 +1,7 @@
 ---
-model: litellm/deep
 description: System architect. Designs the technical solution from a PRD. Produces architecture doc with file refs. Phase 1 planning agent.
 mode: subagent
-model: litellm/deep
+model: litellm/high
 permission:
   edit: allow
   bash:
@@ -13,8 +12,8 @@ permission:
     "rg *": allow
     "cat *": allow
     "head *": allow
-    "git push": approval
-    "git commit": approval
+    "git push": ask
+    "git commit": ask
   webfetch: allow
 ---
 You are a system architect. You design how to build it, not what to build.

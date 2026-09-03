@@ -23,11 +23,23 @@ RUNTIME_MARKER = "runtime"               # inside .pipa/: selected runtime name
 LITELLM_PORT = 4000
 OLLAMA_PORT = 11434
 DASHBOARD_PORT = 8080
-LITELLM_URL = os.environ.get("LITELLM_URL", f"http://localhost:{LITELLM_PORT}")
-LITELLM_KEY = os.environ.get("LITELLM_KEY", "sk-pipa-local")
-OLLAMA_URL = os.environ.get("OLLAMA_URL", f"http://localhost:{OLLAMA_PORT}")
+# URL/key settings resolve lazily from os.environ (see __getattr__ below) so
+# that $PIPA_ROOT/.env — loaded at import time — is honored.
+_LAZY_ENV_DEFAULTS = {
+    "LITELLM_URL": f"http://localhost:{LITELLM_PORT}",
+    "LITELLM_KEY": "sk-pipa-local",
+    "OLLAMA_URL": f"http://localhost:{OLLAMA_PORT}",
+}
 
 SESSION_LOG = "session.log.ndjson"       # inside <project>/.pipa/state/
+
+
+def __getattr__(name: str):
+    """PEP 562: resolve LITELLM_URL / LITELLM_KEY / OLLAMA_URL at access time."""
+    default = _LAZY_ENV_DEFAULTS.get(name)
+    if default is None:
+        raise AttributeError(f"module {__name__!r} has no attribute {name!r}")
+    return os.environ.get(name, default)
 
 
 def load_dotenv() -> None:
@@ -153,73 +165,106 @@ def register_project(project: Path, runtime: str) -> None:
 
 # ── LiteLLM model composer ──────────────────────────────────────────────────
 #
-# models/local/*.yaml   — always-on fragments (local ollama tier)
-# models/cloud/*.yaml   — included only when their `requires:` env var is set;
-#                         later fragments override earlier ones per alias, so
-#                         cloud tiers upgrade local roles transparently.
+# Model lists are DISCOVERED from providers (pipa.providers) and cached in
+# state/model_catalog.json; this composer projects that cache + user tier
+# assignments into .effective.yaml.
 # models/settings.yaml  — litellm_settings/router_settings/general_settings
 # Composed result → models/.effective.yaml (gitignored), consumed by proxy.
-
-
-def _fragment_models(path: Path) -> tuple[list[dict], str | None]:
-    import yaml
-    data = yaml.safe_load(path.read_text()) or {}
-    requires = data.get("requires")
-    if isinstance(requires, str):
-        requires = [requires]
-    missing = [k for k in (requires or []) if not os.environ.get(k)]
-    return data.get("models") or [], (missing or None)
 
 
 def compose_litellm_config(
     root: Path | None = None, force_all: bool = False
 ) -> tuple[Path, str | None]:
-    """Assemble enabled model fragments into the effective gateway config.
+    """Assemble DISCOVERED provider models into the effective gateway config.
 
-    Returns (effective_config_path, warning_or_None).
+    Reads the discovery cache (state/model_catalog.json, refreshed by
+    pipa.providers / the dashboard / `pipa up`). No static model fragments
+    exist; only models reported by providers get routed. Returns
+    (effective_config_path, warning_or_None).
     """
-    root = root or harness_root()
-    mdir = models_dir()
     try:
-        import yaml  # noqa: F401
+        import yaml
     except ImportError:
         raise RuntimeError(
             "PyYAML required to compose the gateway config — run: pip3 install pyyaml"
         )
 
+    root = root or harness_root()
+    mdir = models_dir()
+    load_dotenv()
+
     merged: dict[str, dict] = {}
     excluded: list[str] = []
-    for sub in ("local", "cloud"):
-        for frag in sorted((mdir / sub).glob("*.yaml")):
-            models, missing = _fragment_models(frag)
-            if missing and not force_all:
-                excluded.append(f"{frag.name} (needs {', '.join(missing)})")
-                continue
-            for m in models:
-                merged[m["model_name"]] = m
+    from pipa.providers import PROVIDERS, cached_catalog
+
+    catalog = cached_catalog()
+    for slug, p in PROVIDERS.items():
+        entry = catalog.get(slug) or {}
+        if not entry.get("ok"):
+            excluded.append(f"{p.label}: not discovered yet")
+            continue
+        missing = [k for k in p.requires if not os.environ.get(k)]
+        if missing and not force_all:
+            excluded.append(f"{p.label} (needs {', '.join(missing)})")
+            continue
+        for m in entry.get("models") or []:
+            merged[m["id"]] = {
+                "model_name": m["id"],
+                "litellm_params": p.litellm_params(m["id"]),
+            }
+
+    # Tier aliases: user-assigned via the dashboard, projected onto whatever
+    # discovered model each tier points at.
+    import copy
+
+    from pipa.model_registry import make_entry, tier_assignments
+
+    for tier, target in tier_assignments().items():
+        base = merged.get(target)
+        if base is not None and tier not in merged:
+            merged[tier] = {
+                **base,
+                "model_name": tier,
+                "litellm_params": copy.deepcopy(base["litellm_params"]),
+            }
+
+    # Descriptive aliases: every model also reachable as "provider/model" so
+    # users can pick "moonshot/kimi-k2.7-code" instead of opaque ids.
+    existing_names = set(merged)
+    for m in list(merged.values()):
+        e = make_entry(str(m["model_name"]), m.get("litellm_params") or {}, "", "local", True)
+        if e.slug and e.slug != str(m["model_name"]) and e.slug not in existing_names:
+            merged[e.slug] = {**m, "model_name": e.slug}
+            existing_names.add(e.slug)
 
     settings_path = mdir / "settings.yaml"
     settings = yaml.safe_load(settings_path.read_text()) or {}
 
     header = (
-        "# .effective.yaml — GENERATED by pipa from models/{local,cloud}/\n"
-        "# fragments + settings.yaml. Edit the fragments, not this file.\n"
+        "# .effective.yaml — GENERATED by pipa from live provider discovery\n"
+        "# (state/model_catalog.json) + settings.yaml. Model lists come from\n"
+        "# the wire, never from static files.\n"
     )
-    config = {
+    config_out = {
         "model_list": list(merged.values()),
         **settings,
     }
     effective = mdir / ".effective.yaml"
-    text = header + yaml.safe_dump(config, sort_keys=False, default_flow_style=False)
+    text = header + yaml.safe_dump(config_out, sort_keys=False, default_flow_style=False)
     if not effective.exists() or effective.read_text() != text:
         effective.write_text(text)
 
     warning = None
     if excluded:
-        warning = "gateway: cloud fragments skipped — " + "; ".join(excluded)
+        warning = "gateway: providers skipped — " + "; ".join(excluded)
     return effective, warning
 
 
 def pick_litellm_config(root: Path | None = None) -> tuple[Path, str | None]:
     """Back-compat wrapper over compose_litellm_config."""
     return compose_litellm_config(root)
+
+
+# Load $PIPA_ROOT/.env at import so every consumer of the lazy URL/key
+# settings above (CLI, dashboard, services) sees user overrides.
+load_dotenv()

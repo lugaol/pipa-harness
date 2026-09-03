@@ -17,14 +17,6 @@ litellm_settings:
 
 router_settings:
   routing_strategy: simple-shuffle
-  fallbacks:
-  - primary:
-    - deep
-    - fast
-  - deep:
-    - primary
-  - fast:
-    - primary
 
 general_settings:
   master_key: sk-pipa-local

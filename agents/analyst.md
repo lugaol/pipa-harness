@@ -1,15 +1,14 @@
 ---
-model: litellm/deep
 description: Business analyst. Researches the problem domain, gathers requirements, produces a briefing. Phase 1 planning agent.
 mode: subagent
-model: litellm/deep
+model: litellm/high
 permission:
   edit: allow
   bash:
     "*": deny
     "graphify *": allow
-    "git push": approval
-    "git commit": approval
+    "git push": ask
+    "git commit": ask
   webfetch: allow
   websearch: allow
   external_directory: allow

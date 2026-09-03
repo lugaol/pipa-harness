@@ -1,8 +1,7 @@
 ---
-model: litellm/deep
-description: Scrum master. Bridges Phase 1→2: turns a spec (briefing+PRD+architecture) into self-contained story files the dev agent opens and executes without conversation. The key role.
+description: "Scrum master. Bridges Phase 1→2: turns a spec (briefing+PRD+architecture) into self-contained story files the dev agent opens and executes without conversation. The key role."
 mode: subagent
-model: litellm/deep
+model: litellm/high
 permission:
   edit: allow
   bash:
@@ -10,8 +9,8 @@ permission:
     "ls *": allow
     "cat *": allow
     "graphify *": allow
-    "git push": approval
-    "git commit": approval
+    "git push": ask
+    "git commit": ask
 ---
 You are the scrum master — the bridge between planning and building. Your output is the single most important artifact: self-contained story files.
 

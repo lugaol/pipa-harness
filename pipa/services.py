@@ -22,9 +22,6 @@ ARCH = platform.machine()  # arm64 | x86_64
 
 
 class Reporter:
-    def __init__(self, mode: str = "up"):
-        self.mode = mode  # up | status
-
     def ok(self, msg: str) -> None:
         print(f"  [ok] {msg}")
 
@@ -32,7 +29,7 @@ class Reporter:
         print(f"  [++] {msg}")
 
     def warn(self, msg: str) -> None:
-        print(f"  [!!] {msg}", file=__import__("sys").stderr)
+        print(f"  [!!] {msg}", file=sys.stderr)
 
 
 def have(binary: str) -> bool:
@@ -97,9 +94,6 @@ def ensure_uv(rep: Reporter) -> bool:
     if have("uv"):
         rep.ok("uv")
         return True
-    if rep.mode == "status":
-        rep.warn("uv: MISSING")
-        return False
     rep.add("installing uv...")
     _run("curl -LsSf https://astral.sh/uv/install.sh | sh", shell=True)
     os.environ["PATH"] = f"{Path.home() / '.local' / 'bin'}:{os.environ['PATH']}"
@@ -114,9 +108,6 @@ def ensure_ollama(rep: Reporter) -> bool:
     if have("ollama"):
         rep.ok("ollama")
         return True
-    if rep.mode == "status":
-        rep.warn("ollama: MISSING")
-        return False
     rep.add("installing ollama...")
     if OS == "Darwin" and have("brew"):
         if _run(["brew", "install", "ollama"]) != 0:
@@ -150,9 +141,6 @@ def ensure_python_deps(rep: Reporter) -> bool:
     if not missing:
         rep.ok("python deps (yaml fastapi uvicorn jinja2)")
         return True
-    if rep.mode == "status":
-        rep.warn(f"python deps MISSING: {', '.join(missing)}")
-        return False
     rep.add(f"installing python deps: {', '.join(missing)}...")
     ok_all = True
     for pkg in missing:
@@ -177,9 +165,6 @@ def ensure_litellm(rep: Reporter) -> bool:
     if have("litellm"):
         rep.ok("litellm")
         return True
-    if rep.mode == "status":
-        rep.warn("litellm: MISSING")
-        return False
     rep.add("installing litellm[proxy]...")
     if _run(["uv", "tool", "install", "litellm[proxy]"]) != 0:
         _run(["uv", "tool", "install", "--force", "litellm[proxy]"])
@@ -202,16 +187,10 @@ def ensure_graphify(rep: Reporter) -> bool:
         if probe is None or probe.returncode == 0:
             rep.ok("graphify (+mcp)")
             return True
-        if rep.mode == "status":
-            rep.warn("graphify: present but 'mcp' module missing")
-            return False
         rep.add("adding mcp to graphify tool env...")
         _run(["uv", "tool", "install", "graphifyy", "--with", "mcp", "--reinstall"])
         rep.ok("graphify (+mcp)")
         return True
-    if rep.mode == "status":
-        rep.warn("graphify: MISSING")
-        return False
     rep.add("installing graphifyy (+mcp)...")
     _run(["uv", "tool", "install", "graphifyy", "--with", "mcp"])
     if have("graphify"):
@@ -233,9 +212,6 @@ def ensure_obsidian(rep: Reporter, gui: bool = True) -> bool:
     ):
         rep.ok("obsidian")
         return True
-    if rep.mode == "status":
-        rep.warn("obsidian: MISSING (GUI app)")
-        return False
     rep.add("installing obsidian...")
     if OS == "Darwin" and have("brew"):
         _run(["brew", "install", "--cask", "obsidian"])
@@ -265,9 +241,6 @@ def ensure_emdash(rep: Reporter, gui: bool = True) -> bool:
     if OS == "Linux" and have("emdash"):
         rep.ok("emdash")
         return True
-    if rep.mode == "status":
-        rep.warn("emdash: MISSING (GUI app, optional)")
-        return False
     rep.add("installing emdash from GitHub releases...")
     api = "https://api.github.com/repos/generalaction/emdash/releases/latest"
     try:
@@ -312,9 +285,6 @@ def ensure_dashboard(rep: Reporter, root: Path) -> bool:
     if _pid_alive(pid_file):
         rep.ok(f"dashboard already running (:{config.DASHBOARD_PORT})")
         return True
-    if rep.mode == "status":
-        rep.warn(f"dashboard: not running (:{config.DASHBOARD_PORT})")
-        return False
     rep.add(f"starting dashboard (:{config.DASHBOARD_PORT})...")
     _start_daemon(
         ["python3", str(root / "dashboard" / "server.py")],
@@ -336,9 +306,6 @@ def start_ollama(rep: Reporter) -> bool:
     if _http_up(config.OLLAMA_URL):
         rep.ok("ollama serve already running")
         return True
-    if rep.mode == "status":
-        rep.warn("ollama serve: not running")
-        return False
     rep.add("starting ollama serve...")
     _start_daemon(["ollama", "serve"], state / "ollama.log", state / "ollama.pid")
     if _wait_http(config.OLLAMA_URL, 20):
@@ -361,8 +328,6 @@ def pull_models(rep: Reporter, litellm_config: Path, root: Path) -> None:
     for m in models:
         if m in present:
             rep.ok(f"model present: {m}")
-        elif rep.mode == "status":
-            rep.warn(f"model missing: {m}")
         else:
             rep.add(f"pulling model: {m} (large download)...")
             if _run(["ollama", "pull", m]) == 0:
@@ -378,9 +343,6 @@ def start_litellm(rep: Reporter, litellm_config: Path) -> bool:
     if _http_up(url, headers=headers):
         rep.ok(f"litellm gateway already running (:{config.LITELLM_PORT})")
         return True
-    if rep.mode == "status":
-        rep.warn("litellm gateway: not running")
-        return False
     rep.add(f"starting litellm gateway (:{config.LITELLM_PORT})...")
     spend_log = config.state_dir() / "spend.ndjson"
     _start_daemon(
@@ -422,9 +384,6 @@ def persist_path(rep: Reporter, root: Path) -> None:
             continue
         if rc.exists() and f"{root}/bin" in rc.read_text():
             rep.ok(f"PATH already in {rc.name}")
-            continue
-        if rep.mode == "status":
-            rep.warn(f"PATH: {root}/bin not in {rc.name}")
             continue
         with rc.open("a") as f:
             f.write(f"\n# pipa_harness (pipa CLI + runtimes + uv tools)\n{line}\n")

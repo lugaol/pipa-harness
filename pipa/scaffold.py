@@ -233,6 +233,16 @@ def init_project(
     # 4. Runtime wiring is machine-global now (writes ~/.config, ~/.dsh)
     actions.extend(runtimes.wire(name, target, root))
 
+    # 4b. Per-project agents: expose .pipa/agents-local to opencode's
+    #     project-level discovery path (<project>/.opencode/agent).
+    agents_local = pipa_dir / "agents-local"
+    if agents_local.is_dir():
+        oc_agent = target / ".opencode" / "agent"
+        if not oc_agent.exists():
+            oc_agent.parent.mkdir(parents=True, exist_ok=True)
+            oc_agent.symlink_to("../.pipa/agents-local")
+            actions.append(f"+ .opencode/agent -> {config.PIPA_DIR}/agents-local")
+
     # 5. .graphifyignore from the scaffold templates
     gi_src = _scaffold_templates(root) / ".graphifyignore"
     if gi_src.exists() and not (target / ".graphifyignore").exists():
@@ -401,6 +411,8 @@ def check_extension(target: Path) -> list[tuple[bool, str]]:
         cfg = home / ".config" / "opencode" / "opencode.jsonc"
         ok = cfg.exists() and "pipa" in cfg.read_text()
         checks.append((ok, "opencode global config wired"))
+        plugin = home / ".config" / "opencode" / "plugin" / "pipa-session-bus.js"
+        checks.append((plugin.is_file(), "session bus plugin wired"))
     elif name == "deepseek-harness":
         cfg = home / ".dsh" / "cordis.patch.yml"
         checks.append((cfg.exists(), "~/.dsh/cordis.patch.yml wired"))

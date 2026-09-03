@@ -1,0 +1,146 @@
+{% extends "base.html" %}
+{% block title %}Context · pipa dashboard{% endblock %}
+{% block content %}
+    {% if tier == "project" and projects %}
+    <form method="get" action="/context" class="picker">
+      <input type="hidden" name="tier" value="project">
+      <input type="hidden" name="tab" value="{{ tab }}">
+      <label>Project:</label>
+      <select name="proj" onchange="this.form.submit()">
+        {% for p in projects %}<option value="{{ p['path'] }}" {% if p['path'] == proj %}selected{% endif %}>{{ p['path'].rsplit('/',1)[-1] }}</option>{% endfor %}
+      </select>
+      <noscript><button type="submit">Go</button></noscript>
+    </form>
+    {% endif %}
+
+<h1>Context</h1>
+
+{% if saved %}<div class="flash">Saved.</div>{% endif %}
+{% if deleted %}<div class="flash">Deleted.</div>{% endif %}
+{% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+{% if tier_hint %}<div class="flash error">{{ tier_hint }}</div>{% endif %}
+
+<div class="filter-bar">
+  <span class="dim">Scope:</span>
+  <span class="tier-switch">
+    <a href="/context?tier=global&amp;tab={{ tab }}" {% if tier == 'global' %}class="active"{% endif %}>Global install</a>
+    {% if has_project %}
+    <a href="/context?tier=project&amp;tab={{ tab }}" {% if tier == 'project' %}class="active"{% endif %}>Active project</a>
+    {% else %}
+    <span class="tier-disabled" title="No active pipa project detected from cwd">Active project</span>
+    {% endif %}
+  </span>
+  <span class="tabs">
+    {% for t in tabs %}
+    <a href="/context?tier={{ tier }}&amp;tab={{ t.id }}" {% if t.id == tab %}class="active"{% endif %}>{{ t.label }}</a>
+    {% endfor %}
+  </span>
+</div>
+
+{% if tab == 'agents' %}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Agent definitions</h2>
+      <form method="get" action="/context/edit" class="inline-form">
+        <input type="hidden" name="tier" value="{{ tier }}">
+        <input type="hidden" name="tab" value="agents">
+        <input type="hidden" name="path" value="new">
+        <input type="text" name="name" placeholder="new-agent-name" required>
+        <button type="submit">New agent</button>
+      </form>
+    </div>
+    <p class="dim">Model tiers are assigned on the <a href="/agents">Agents page</a> — one place, harness and projects together.</p>
+    {% if agent_rows %}
+    <table>
+      <thead><tr><th>agent</th><th>description</th><th>model</th><th>actions</th></tr></thead>
+      <tbody>
+        {% for a in agent_rows %}
+        <tr>
+          <td class="mono">{{ a.name }}</td>
+          <td class="dim detail-cell">{{ a.description or '—' }}</td>
+          <td><span class="badge cloud mono" title="override if set, else runtime default">{{ a.model_badge }}</span></td>
+          <td class="nowrap">
+            <a href="/context/edit?tier={{ tier }}&amp;tab=agents&amp;path={{ a.path_rel }}">Edit</a>
+            <form method="post" action="/context/delete" class="inline-form"
+                  onsubmit="return confirm('Delete {{ a.path_rel }}?')">
+              <input type="hidden" name="tier" value="{{ tier }}">
+              <input type="hidden" name="tab" value="agents">
+              <input type="hidden" name="path" value="{{ a.path_rel }}">
+              <button type="submit" class="danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      {% with message='No ' + tab + ' entries in this scope yet — create one above.' %}{% include "empty_state.html" %}{% endwith %}
+    {% endif %}
+  </section>
+
+{% elif tab == 'mcp' %}
+  <section class="panel">
+    <h2>MCP servers</h2>
+    <p class="dim">
+      Registry at <span class="mono">mcp/&lt;name&gt;/config.json</span>. Enabled
+      servers are merged into the runtime config on the next
+      <span class="mono">pipa up</span>.
+    </p>
+    {% if servers %}
+    <table>
+      <thead><tr><th>server</th><th>type</th><th>endpoint / command</th><th>state</th><th>action</th></tr></thead>
+      <tbody>
+        {% for s in servers %}
+        <tr>
+          <td class="mono">{{ s.name }}</td>
+          <td>{{ s.type }}</td>
+          <td class="mono dim path-cell">{{ s.detail }}</td>
+          <td>{% if s.enabled %}<span class="badge ok">enabled</span>{% else %}<span class="badge dim-badge">disabled</span>{% endif %}</td>
+          <td>
+            <form method="post" action="/api/mcp/toggle" class="inline-form">
+              <input type="hidden" name="server" value="{{ s.name }}">
+              <input type="hidden" name="tier" value="{{ tier }}">
+              <input type="hidden" name="enabled" value="{{ '0' if s.enabled else '1' }}">
+              <button type="submit">{{ 'Disable' if s.enabled else 'Enable' }}</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    {% else %}
+      {% with message='No MCP servers registered under mcp/.' %}{% include "empty_state.html" %}{% endwith %}
+    {% endif %}
+  </section>
+
+{% elif tab == 'skills' %}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Skills</h2>
+      <form method="get" action="/context/edit" class="inline-form">
+        <input type="hidden" name="tier" value="{{ tier }}">
+        <input type="hidden" name="tab" value="skills">
+        <input type="hidden" name="path" value="new">
+        <input type="text" name="name" placeholder="skill-slug (a-z0-9-)" required pattern="[a-z0-9-]+">
+        <button type="submit">New skill</button>
+      </form>
+    </div>
+    {% include "_entry_table.html" %}
+  </section>
+
+{% else %}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>Rules</h2>
+      <form method="get" action="/context/edit" class="inline-form">
+        <input type="hidden" name="tier" value="{{ tier }}">
+        <input type="hidden" name="tab" value="rules">
+        <input type="hidden" name="path" value="new">
+        <input type="text" name="name" placeholder="new-rule-name" required>
+        <button type="submit">New rule</button>
+      </form>
+    </div>
+    {% include "_entry_table.html" %}
+  </section>
+{% endif %}
+{% endblock %}

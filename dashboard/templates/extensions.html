@@ -1,9 +1,0 @@
-{% extends "base.html" %}
-{% block title %}Projects · pipa dashboard{% endblock %}
-{% block content %}
-<h1>Projects</h1>
-<p class="dim">{{ count }} registered project(s) from <span class="mono">state/projects.json</span>.</p>
-{% with columns=columns, rows=rows, empty_message='No projects registered yet — run `pipa init` in a project.' %}
-  {% include "table.html" %}
-{% endwith %}
-{% endblock %}

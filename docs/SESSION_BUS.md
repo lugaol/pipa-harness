@@ -21,7 +21,7 @@ by tooling, anything else can `pipa hook note ...` directly.
   // ── payload, keyed by event ──
   "tool": "bash",                        // pre-tool / post-tool
   "payload": "rg -n foo",                // args (pre-*) / output excerpt (post-*)
-  "model": "primary",                    // pre-model / post-model
+  "model": "mid",                        // pre-model / post-model
   "tokens_in": 1200, "tokens_out": 340,  // post-model, optional usage
   "cost_usd": 0.0,                       // post-model, optional
   "text": "human note"                   // note

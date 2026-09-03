@@ -1,8 +1,7 @@
 ---
-model: litellm/explore
 description: Read-only code exploration. Find files, search code, answer questions about the codebase. Use graphify first, then grep. Returns concise file:line refs.
 mode: subagent
-model: litellm/explore
+model: litellm/lowest
 permission:
   edit: deny
   bash:
@@ -15,8 +14,8 @@ permission:
     "head *": allow
     "wc *": allow
     "graphify *": allow
-    "git push": approval
-    "git commit": approval
+    "git push": ask
+    "git commit": ask
   task:
     "*": deny
 ---

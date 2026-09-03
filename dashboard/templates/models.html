@@ -2,56 +2,88 @@
 {% block title %}Models · pipa dashboard{% endblock %}
 {% block content %}
 <h1>Models</h1>
-<p class="dim">{{ total }} alias(es) served by the gateway.</p>
+<p class="dim">Every configured model is listed below — nothing is sorted into
+tiers automatically. You decide which model serves each tier; agents then run
+on the tier you give them.</p>
 
 <section class="panel">
-  <h2>Local</h2>
-  {% if groups.local %}
-  <div class="chip-row">
-    {% for m in groups.local %}<span class="badge">{{ m }}</span>{% endfor %}
-  </div>
-  {% else %}{% with message='No local models listed.' %}{% include "empty_state.html" %}{% endwith %}{% endif %}
-</section>
-
-<section class="panel">
-  <h2>Cloud</h2>
-  {% if groups.cloud %}
-  <div class="chip-row">
-    {% for m in groups.cloud %}<span class="badge cloud">{{ m }}</span>{% endfor %}
-  </div>
-  {% else %}{% with message='No cloud models listed.' %}{% include "empty_state.html" %}{% endwith %}{% endif %}
-</section>
-
-<section class="panel">
-  <h2>Agent overrides</h2>
-  <p class="dim">Pin an agent to a gateway model. Empty value clears the override
-  (stored at <span class="mono">state/agent_llm_overrides.json</span>).</p>
-  {% if agent_rows %}
-    <datalist id="model-aliases">
-      {% for m in groups.local + groups.cloud %}<option value="{{ m }}"></option>{% endfor %}
-    </datalist>
-    <table>
-      <thead><tr><th>agent</th><th>frontmatter model</th><th>override</th><th>set</th></tr></thead>
-      <tbody>
-        {% for a in agent_rows %}
-        <tr>
-          <td>{{ a.name }}</td>
-          <td class="mono dim">{{ a.base_model or '—' }}</td>
-          <td class="mono">{{ a.override or '—' }}</td>
-          <td>
-            <form method="post" action="/api/overrides" class="inline-form">
-              <input type="hidden" name="agent" value="{{ a.name }}">
-              <input type="text" name="model" list="model-aliases"
-                     placeholder="gateway model alias" value="{{ a.override }}">
-              <button type="submit">Save</button>
-            </form>
-          </td>
-        </tr>
+  <h2>Tier configuration</h2>
+  <div class="tier-config">
+    {% for t in tiers %}
+    <form method="post" action="/api/tiers" class="tier-row">
+      <span class="badge cloud mono tier-chip">{{ t.alias }}</span>
+      <div class="tier-info">
+        <div class="tier-name">{{ t.label }}</div>
+        <div class="dim small">
+          {% if t.status == 'unset' %}not set yet
+          {% elif t.status == 'needs-key' %}{{ t.display }} <span class="badge warn">needs API key</span>
+          {% else %}{{ t.display }}{% endif %}
+        </div>
+      </div>
+      <input type="hidden" name="tier" value="{{ t.alias }}">
+      <select name="model">
+        <option value="" {{ 'selected' if not t.assigned_alias else '' }}>— not set —</option>
+        {% for c in catalog %}
+        <option value="{{ c.alias }}" {{ 'selected' if t.assigned_alias == c.alias else '' }}
+                {{ 'disabled' if not c.active else '' }}>
+          {{ c.display }}{{ ' — needs API key' if not c.active else '' }}
+        </option>
         {% endfor %}
-      </tbody>
-    </table>
-  {% else %}
-    {% with message='No agents discovered to override.' %}{% include "empty_state.html" %}{% endwith %}
+      </select>
+      <button type="submit" class="btn btn-sm btn-primary">Save</button>
+    </form>
+    {% endfor %}
+  </div>
+  {% if request.query_params.get('saved') == '1' %}
+  <p class="badge ok">Tier saved.</p>
+  {% elif request.query_params.get('error') == '1' %}
+  <p class="badge warn">Could not save that tier assignment.</p>
   {% endif %}
+</section>
+
+<section class="panel">
+  <h2>Available models</h2>
+  <p class="dim">Discovered live from providers — free tiers change often, so
+  this list is never hardcoded. Assign any model to a tier above.</p>
+  {% if discovery.fetched_at %}
+  <p class="dim small">Last refreshed {{ discovery.fetched_at }}
+    {% for p in discovery.providers %}
+      · {{ p.label }}: {{ p.count if p.ok else ('unreachable' if not p.error else 'error') }}
+    {% endfor %}
+  </p>
+  {% else %}
+  <p class="badge warn">Never refreshed — click Refresh to discover models from providers.</p>
+  {% endif %}
+  <form method="post" action="/api/models/refresh" class="inline-form">
+    <button type="submit" class="btn btn-sm btn-secondary">Refresh from providers</button>
+  </form>
+  {% if request.query_params.get('refreshed') == '1' %}<p class="badge ok">Discovery updated.</p>{% endif %}
+  {% if request.query_params.get('refresh-error') == '1' %}<p class="badge warn">All providers unreachable — check keys/network.</p>{% endif %}
+  {% if catalog %}
+  <div class="table-wrap">
+  <table class="frag-table">
+    <thead><tr><th>Model</th><th>Provider</th><th>Type</th><th>Status</th></tr></thead>
+    <tbody>
+      {% for c in catalog %}
+      <tr>
+        <td>{{ c.display }}</td>
+        <td class="dim">{{ c.provider }}</td>
+        <td><span class="badge {{ 'cloud' if c.kind == 'cloud' else '' }}">{{ c.kind }}</span></td>
+        <td>{% if c.active %}<span class="badge ok">READY</span>
+            {% else %}<span class="badge warn">NEEDS API KEY</span>{% endif %}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+  {% else %}
+    {% with message='No models discovered yet — refresh from providers.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endif %}
+  <div class="chip-row keys-row">
+    {% for k in env_keys %}
+      {% if k.present %}<span class="badge ok">{{ k.name }} SET</span>
+      {% else %}<span class="badge warn">{{ k.name }} UNSET</span>{% endif %}
+    {% endfor %}
+  </div>
 </section>
 {% endblock %}

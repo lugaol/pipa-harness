@@ -19,16 +19,14 @@ available.
 
 DSH has no per-project config: it composes patch layers from `$DSH_HOME`
 (default `~/.dsh`). `pipa init --runtime deepseek-harness` (or
-`pipa runtime set deepseek-harness`) writes:
+`pipa runtime set deepseek-harness`) writes machine-global files only:
 
-1. `.pipa/deepseek-harness/cordis.patch.yml` — project-local copy of the
-   routing patch (portable record; gitignored).
-2. `~/.dsh/cordis.patch.yml` — the machine-level layer (outranks per-profile
+1. `~/.dsh/cordis.patch.yml` — the machine-level layer (outranks per-profile
    layers). Routes the dormant base-bundle `llm-pi-ai` adapter at the LiteLLM
    gateway (`api: openai-completions`) and sets `agent-default-model` to
-   `litellm/primary`. Written only when missing or already pipa-managed —
+   `litellm/mid`. Written only when missing or already pipa-managed —
    user edits are never clobbered.
-3. `~/.dsh/.credentials.yaml` — `LITELLM_API_KEY` ref on fresh installs.
+2. `~/.dsh/.credentials.yaml` — `LITELLM_API_KEY` ref on fresh installs.
    dsh resolves `apiKeyEnv` per request from env or this file; keys never
    live in YAML.
 
@@ -45,12 +43,6 @@ hooks for OpenCode) and DSH's own JSONL sessions under `~/.dsh/sessions/`
 are separate stores today; the dashboard reads the pipa log for both via
 `pipa hook`. There is no `session:` config key in dsh — earlier versions of
 this template claimed one; that schema was fictional.
-
-## extension/
-
-`extension` is a symlink to `../opencode/extension` — the project extension
-scaffold (rules, skills, agents, specs, vault, state) is pure markdown and
-runtime-agnostic, so both runtimes share one template.
 
 ## Gotchas (verified against dsh source)
 

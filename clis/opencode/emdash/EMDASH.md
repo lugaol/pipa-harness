@@ -35,6 +35,6 @@ reads `.opencode/opencode.jsonc` which points at the LiteLLM gateway
 
 ## Model routing per task
 
-emdash tasks using OpenCode inherit the model from `opencode.jsonc` (`litellm/primary`).
+emdash tasks using OpenCode inherit the model from `opencode.jsonc` (`litellm/mid`).
 To use a different model alias for a specific task, set the env var before creating it,
-or override in the task's OpenCode session with `/model litellm/deep`.
+or override in the task's OpenCode session with `/model litellm/high`.

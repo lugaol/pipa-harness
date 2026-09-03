@@ -171,3 +171,17 @@ def test_harness_stores_used_when_project_has_none(env):
     sources = [r["source"] for r in out["results"]]
     assert sources[0] == "memory-db"
     assert any(r["path"] and "harness-note.md" in r["path"] for r in out["results"])
+
+
+def test_canonical_pipa_memory_dir_is_searched(env):
+    _, project = env
+    mem = project / ".pipa" / "memory" / "decisions"
+    mem.mkdir(parents=True)
+    (mem / "gateway-choice.md").write_text(
+        "# Why we chose litellm gateway\nsingle alias surface for runtimes\n"
+    )
+    out = recall("litellm gateway", project=project)
+    assert any(
+        r["source"] == "vault" and r["path"] and ".pipa/memory" in r["path"]
+        for r in out["results"]
+    )
