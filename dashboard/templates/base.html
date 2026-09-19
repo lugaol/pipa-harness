@@ -1,97 +1,171 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>{% block title %}pipa dashboard{% endblock %}</title>
-  <link rel="stylesheet" href="/static/style.css">
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>{% block title %}pipa — harness{% endblock %}</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/marked/marked.min.js" defer></script>
+<link rel="stylesheet" href="/static/css/base.css">
+<link rel="stylesheet" href="/static/css/tables.css">
+<link rel="stylesheet" href="/static/css/pages/status.css">
+<link rel="stylesheet" href="/static/style.css">
+{% block pagecss %}{% endblock %}
 </head>
 <body>
+
 <div class="app-layout">
-  <aside class="sidebar" role="navigation" aria-label="Main navigation">
+  <aside class="sidebar" role="navigation" aria-label="Main navigation" id="sidebar">
     <div class="sidebar-brand">
       <div class="sidebar-logo">&pi;</div>
       <div class="sidebar-brand-text">
-        <h1>pipa_harness</h1>
-        <p>operations console</p>
+        <h1>pipa</h1>
+        <p id="clock">Loading…</p>
       </div>
+      <button class="sidebar-close" aria-label="Close navigation" onclick="toggleSidebar()">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>
+      </button>
     </div>
 
     <nav class="nav-section">
       <div class="nav-label">Overview</div>
-      <a class="nav-item" href="/"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>Status</a>
-      <a class="nav-item" href="/sessions"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="12 6 12 12 16 14"/></svg>Sessions</a>
-      <a class="nav-item" href="/spend"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="12" y1="1" x2="12" y2="23"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>Spend</a>
+      <a class="nav-item" href="/">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Status
+      </a>
+      <a class="nav-item" href="/observability">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M3 3v18h18"/><path d="M7 16l4-4 3 3 5-6"/></svg>
+        Observability
+      </a>
+      <a class="nav-item" href="/team">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Team
+      </a>
     </nav>
 
     <nav class="nav-section">
-      <div class="nav-label">Models &amp; Knowledge</div>
-      <a class="nav-item" href="/models"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/><polyline points="3.27 6.96 12 12.01 20.73 6.96"/><line x1="12" y1="22.08" x2="12" y2="12"/></svg>LLM Models</a>
-      <a class="nav-item" href="/context"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="13" y2="17"/></svg>Context</a>
-      <a class="nav-item" href="/memory"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2a7 7 0 0 0-7 7c0 2.38 1.19 4.47 3 5.74V17a1 1 0 0 0 1 1h6a1 1 0 0 0 1-1v-2.26c1.81-1.27 3-3.36 3-5.74a7 7 0 0 0-7-7z"/><line x1="9" y1="21" x2="15" y2="21"/></svg>Memory</a>
-      <a class="nav-item" href="/graph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="5" cy="6" r="3"/><circle cx="19" cy="6" r="3"/><circle cx="12" cy="18" r="3"/><line x1="7.5" y1="8" x2="10.5" y2="15.5"/><line x1="16.5" y1="8" x2="13.5" y2="15.5"/><line x1="8" y1="6" x2="16" y2="6"/></svg>Graph</a>
+      <div class="nav-label">Tools</div>
+      <a class="nav-item" href="/graphify">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg>
+        Graph
+      </a>
     </nav>
 
     <nav class="nav-section">
-      <div class="nav-label">Project</div>
-      <a class="nav-item" href="/projects"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/></svg>Projects</a>
-      <a class="nav-item" href="/agents"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>Agents</a>
-      <a class="nav-item" href="/evals"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 11 12 14 22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/></svg>Evals</a>
+      <div class="nav-label">Config</div>
+      <a class="nav-item" href="/tiers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15 9 22 9 16.5 13.5 18.5 21 12 17 5.5 21 7.5 13.5 2 9 9 9 12 2"/></svg>
+        Tier Manager
+      </a>
+      <a class="nav-item" href="/agents">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
+        Agents
+      </a>
+      <a class="nav-item" href="/models">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2L2 7l10 5 10-5-10-5z"/><path d="M2 17l10 5 10-5"/><path d="M2 12l10 5 10-5"/></svg>
+        Models
+      </a>
+      <a class="nav-item" href="/knowledge">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/></svg>
+        Knowledge
+      </a>
+      <a class="nav-item" href="/docs">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M2 3h6a4 4 0 0 1 4 4v14a3 3 0 0 0-3-3H2z"/><path d="M22 3h-6a4 4 0 0 0-4 4v14a3 3 0 0 1 3-3h7z"/></svg>
+        Rules &amp; Skills
+      </a>
+    </nav>
+
+    <nav class="nav-section">
+      <div class="nav-label">Catalog</div>
+      <a class="nav-item" href="/providers">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="2" width="20" height="8" rx="2" ry="2"/><rect x="2" y="14" width="20" height="8" rx="2" ry="2"/><line x1="6" y1="6" x2="6.01" y2="6"/><line x1="6" y1="18" x2="6.01" y2="18"/></svg>
+        Providers
+      </a>
+    </nav>
+
+    <nav class="nav-section">
+      <div class="nav-label">Setup</div>
+      <a class="nav-item" href="/install">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14.7 6.3a1 1 0 0 0 0 1.4l1.6 1.6a1 1 0 0 0 1.4 0l3.77-3.77a6 6 0 0 1-7.94 7.94l-6.91 6.91a2.12 2.12 0 0 1-3-3l6.91-6.91a6 6 0 0 1 7.94-7.94l-3.76 3.76z"/></svg>
+        Install
+      </a>
     </nav>
 
     <div class="sidebar-footer">
       <div class="status-pill">
         <span class="status-dot online" id="global-status-dot"></span>
-        <span id="global-status-text">Checking&hellip;</span>
+        <span id="global-status-text">Checking…</span>
       </div>
     </div>
   </aside>
+  <div class="sidebar-backdrop" id="sidebar-backdrop" onclick="toggleSidebar()"></div>
 
-  <main class="main-content content">
+  <main class="main-content">
+    <div class="top-bar">
+      <div class="top-bar-title">
+        <button class="sidebar-toggle" aria-label="Toggle navigation" onclick="toggleSidebar()" aria-expanded="false">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <div>
+          <h2>{% block pagetitle %}Operations Dashboard{% endblock %}</h2>
+          <p class="subtitle">{% block pagesubtitle %}Harness health and operations at a glance{% endblock %}</p>
+        </div>
+      </div>
+      <div class="top-bar-actions">
+        <button class="btn btn-secondary btn-sm" onclick="location.reload()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Refresh
+        </button>
+        <button class="btn btn-primary btn-sm" onclick="restartGateway()">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="1 4 1 10 7 10"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg>
+          Restart Gateway
+        </button>
+      </div>
+    </div>
+
     {% block content %}{% endblock %}
   </main>
 </div>
+
+<div class="toast-container" id="toast-container"></div>
+
+<div class="modal-overlay" id="confirm-modal">
+  <div class="modal">
+    <h3 id="modal-title">Confirm Action</h3>
+    <div class="modal-body" id="modal-body"></div>
+    <div class="modal-footer">
+      <button class="btn btn-secondary" onclick="closeModal()">Cancel</button>
+      <button class="btn btn-primary" id="modal-confirm-btn">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="/static/js/common.js"></script>
 <script>
-  // multi-page: highlight the active nav item by pathname
+  // Active nav — exact match for "/" else prefix match
   (function () {
     var path = location.pathname === "/" ? "/" : location.pathname.replace(/\/$/, "");
     document.querySelectorAll(".nav-item[href]").forEach(function (a) {
       var href = a.getAttribute("href");
       a.classList.toggle("active", href === path || (href !== "/" && path.indexOf(href) === 0));
+      if (a.classList.contains("active")) a.setAttribute("aria-current", "page");
     });
   })();
-  // sidebar health pill: fetch once, then poll so it never goes stale
-  (function () {
-    var dot = document.getElementById("global-status-dot");
-    var text = document.getElementById("global-status-text");
-    function refresh() {
-      fetch("/api/health").then(function (r) { return r.json(); }).then(function (h) {
-        var up = h.gateway && h.ollama;
-        dot.classList.toggle("online", !!up);
-        dot.classList.toggle("offline", !up);
-        text.textContent = up ? "All services up" :
-          (h.gateway ? "ollama down" : (h.ollama ? "gateway down" : "services down"));
-      }).catch(function () {
-        dot.classList.add("offline");
-        text.textContent = "unreachable";
-      });
-    }
-    refresh();
-    setInterval(refresh, 15000);
-  })();
-  // long actions (gateway restart, evals): disable the clicked button and
-  // show progress so the POST doesn't look hung
+  // Button spinner on submit
   document.addEventListener("submit", function (ev) {
     var btn = ev.target.querySelector("button[type=submit]");
     if (!btn || ev.target.dataset.noSpin) return;
     btn.disabled = true;
     btn.dataset.label = btn.textContent;
     btn.textContent = "Working…";
-    setTimeout(function () { // safety net if navigation is blocked
+    setTimeout(function () {
       btn.disabled = false;
       if (btn.dataset.label) btn.textContent = btn.dataset.label;
     }, 30000);
   }, true);
 </script>
+{% block pagescript %}{% endblock %}
 </body>
 </html>

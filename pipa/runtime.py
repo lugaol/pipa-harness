@@ -21,6 +21,7 @@ from . import config
 
 # pipa agent -> model tier (lowest..xhigh; used when generating runtime configs)
 AGENT_MODEL_MAP = {
+    "orchestrator": "xhigh",
     "dev": "mid",
     "qa": "low",
     "explorer": "lowest",
@@ -32,6 +33,23 @@ AGENT_MODEL_MAP = {
 }
 
 RUNTIME_FILE = "runtime"
+
+
+def primary_tier() -> str:
+    """Tier driving the runtime primary model.
+
+    User override (`orchestrator` entry in the tier-override store) wins;
+    else the `orchestrator` default in AGENT_MODEL_MAP. "" when neither
+    is a known tier — callers fall back to strongest-assigned.
+    """
+    from pipa.agent_tiers import override_for
+    from pipa.model_registry import TIER_ALIASES, normalize_tier
+
+    tier = normalize_tier(override_for("orchestrator") or "")
+    if tier in TIER_ALIASES:
+        return tier
+    default = normalize_tier(AGENT_MODEL_MAP.get("orchestrator", ""))
+    return default if default in TIER_ALIASES else ""
 
 
 @dataclass
@@ -148,6 +166,8 @@ def _mcp_registry(root: Path) -> dict[str, dict]:
     if not mcp_root.is_dir():
         return servers
     for cfg in sorted(mcp_root.glob("*/config.json")):
+        if cfg.parent.name.startswith("_"):
+            continue  # scaffolding (_template) is never merged
         try:
             data = json.loads(cfg.read_text())
         except Exception:
@@ -235,12 +255,16 @@ def render_opencode_config(root: Path) -> dict:
         m["id"]: {"name": m["name"]} for m in runtime_model_list()
     }
 
-    # Default models come from user tier assignments; strongest assigned tier
-    # is the main model, weakest the small model. No assignment -> template
-    # defaults stay untouched (user configures tiers in the dashboard).
+    # Default models come from user tier assignments. The orchestrator
+    # (primary-agent) tier pins the main model when it resolves; otherwise
+    # the strongest assigned tier is the main model and the weakest is the
+    # small model. No assignment -> template defaults stay untouched (user
+    # configures tiers in the dashboard).
     resolved = [t for t in TIER_ALIASES if t in tier_resolution()]
+    primary = primary_tier()
     if resolved:
-        cfg["model"] = f"litellm/{resolved[-1]}"
+        main = primary if primary in tier_resolution() else resolved[-1]
+        cfg["model"] = f"litellm/{main}"
         cfg["small_model"] = f"litellm/{resolved[0]}"
 
     def walk(node):
@@ -264,6 +288,25 @@ def _render_session_bus_plugin(root: Path) -> str:
         .replace("@@PIPA_BIN@@", str(bin_path))
         .replace("@@PIPA_RUNTIME@@", "opencode")
     )
+
+
+def _render_memory_plugin(root: Path) -> str:
+    """Memory-context plugin source with wire-time substitutions."""
+    template = root / "clis" / "opencode" / "plugin" / "pipa-memory-context.js"
+    bin_path = root / "bin" / "pipa"
+    return template.read_text().replace("@@PIPA_BIN@@", str(bin_path))
+
+
+def _write_plugin(gdir: Path, filename: str, content: str, actions: list,
+                  purpose: str) -> None:
+    """Create-only plugin install: existing files are never overwritten."""
+    plugin_src = gdir / "plugin" / filename
+    if plugin_src.exists():
+        actions.append(f"~ kept existing {plugin_src}")
+    else:
+        plugin_src.parent.mkdir(parents=True, exist_ok=True)
+        plugin_src.write_text(content)
+        actions.append(f"+ wrote {plugin_src} ({purpose})")
 
 
 def wire_opencode(project: Path, root: Path) -> list[str]:
@@ -297,12 +340,19 @@ def wire_opencode(project: Path, root: Path) -> list[str]:
     plugin_template = root / "clis" / "opencode" / "plugin" / "pipa-session-bus.js"
     if not plugin_template.exists():
         actions.append(f"!! missing session-bus plugin template {plugin_template}")
-    elif plugin_src.exists():
-        actions.append(f"~ kept existing {plugin_src}")
     else:
-        plugin_src.parent.mkdir(parents=True, exist_ok=True)
-        plugin_src.write_text(_render_session_bus_plugin(root))
-        actions.append(f"+ wrote {plugin_src} (session bus → pipa hook)")
+        _write_plugin(gdir, "pipa-session-bus.js",
+                      _render_session_bus_plugin(root), actions,
+                      "session bus → pipa hook")
+
+    # memory context: auto-loads a bounded recall digest into prompts.
+    mem_template = root / "clis" / "opencode" / "plugin" / "pipa-memory-context.js"
+    if not mem_template.exists():
+        actions.append("!! missing memory-context plugin template")
+    else:
+        _write_plugin(gdir, "pipa-memory-context.js",
+                      _render_memory_plugin(root), actions,
+                      "memory digest → system prompt")
     return actions
 
 

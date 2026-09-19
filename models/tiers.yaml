@@ -1,0 +1,59 @@
+# models/tiers.yaml — tier policy metadata (descriptive, not assignments).
+#
+# Which MODEL backs each tier is always a user decision (dashboard Models
+# page → state/tier_assignments.json). This file only documents what each
+# tier is for, cost/latency budgets, and the default tier per agent
+# (agent_tiers — must stay in sync with AGENT_MODEL_MAP in pipa/runtime.py;
+# `pipa doctor` warns on drift).
+#
+# Ported from ia_harness models/registry/gateways.yaml (tiers/agent_tiers),
+# generalized: no provider/model ids here, only tier + agent names.
+
+tiers:
+  lowest:
+    label: Lowest
+    description: High-volume, tool-free first pass — triage, exploration, cheap retries.
+    cost_ceiling_usd_per_1m: 0.4
+    latency_target_ms: 3000
+    min_context: 16384
+    max_steps: 4
+  low:
+    label: Low
+    description: Scoped coding, search, quick verification runs.
+    cost_ceiling_usd_per_1m: 0.4
+    latency_target_ms: 5000
+    min_context: 32768
+    max_steps: 6
+  mid:
+    label: Mid
+    description: Default implementation tier — mechanical, multi-step work.
+    cost_ceiling_usd_per_1m: 1.0
+    latency_target_ms: 10000
+    min_context: 65536
+    max_steps: 10
+  high:
+    label: High
+    description: Strong planning and critique — specs, architecture, QA verdicts.
+    cost_ceiling_usd_per_1m: 3.0
+    latency_target_ms: 20000
+    min_context: 131072
+    max_steps: 16
+  xhigh:
+    label: X-High
+    description: Frontier tier — orchestrator and the hardest cross-cutting design.
+    cost_ceiling_usd_per_1m: 15.0
+    latency_target_ms: 30000
+    min_context: 200000
+    max_steps: 24
+
+# agent -> default tier (no per-agent override). Mirrors AGENT_MODEL_MAP.
+agent_tiers:
+  orchestrator: xhigh
+  dev: mid
+  qa: low
+  explorer: lowest
+  analyst: high
+  pm: high
+  architect: high
+  sm: mid
+  researcher: high

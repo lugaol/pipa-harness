@@ -1,0 +1,129 @@
+{% extends "base.html" %}
+{% block title %}Observability · pipa{% endblock %}
+{% block pagetitle %}Observability{% endblock %}
+{% block pagesubtitle %}Flight recorder and spend ledger.{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <span class="tabs">
+    <a href="/observability?tab=sessions" {% if tab == 'sessions' %}class="active"{% endif %}>Sessions</a>
+    <a href="/observability?tab=spend" {% if tab == 'spend' %}class="active"{% endif %}>Spend</a>
+    <a href="/observability?tab=usage" {% if tab == 'usage' %}class="active"{% endif %}>Usage</a>
+  </span>
+</div>
+
+{% if tab == 'usage' %}
+  <section class="panel">
+    <h2>Adoption</h2>
+    <p class="dim small" style="margin-bottom:0.6rem">{{ usage.sessions }} sessions · same rollup as <span class="mono">pipa usage-report</span>.</p>
+    <div class="cards">
+      {% with label='Sessions', value=usage.sessions, detail='recorded' %}{% include "stat_card.html" %}{% endwith %}
+      {% with label='Spend', value='$' + usage.spend.cost_usd|string, detail=usage.spend.rows|string + ' calls' %}{% include "stat_card.html" %}{% endwith %}
+    </div>
+  </section>
+
+  {% if usage.per_day %}
+  <section class="panel">
+    <h2>Sessions per day</h2>
+    <div class="table-wrap">
+    <table class="frag-table">
+      <thead><tr><th>day</th><th>sessions</th></tr></thead>
+      <tbody>
+        {% for day, n in usage.per_day %}<tr><td class="mono small">{{ day }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+
+  {% for title, rows in [('Top tools', usage.top_tools), ('Top session models', usage.top_models), ('Runtimes', usage.runtimes)] %}
+  {% if rows %}
+  <section class="panel">
+    <h2>{{ title }}</h2>
+    <div class="table-wrap">
+    <table class="frag-table">
+      <thead><tr><th>name</th><th>count</th></tr></thead>
+      <tbody>
+        {% for name, n in rows %}<tr><td class="mono small">{{ name }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+  {% endfor %}
+
+{% elif tab == 'spend' %}
+  <section class="panel">
+    <form method="get" action="/observability" class="inline-form">
+      <input type="hidden" name="tab" value="spend">
+      <input type="text" name="since" value="{{ since }}" placeholder="2026-01-01T00:00:00Z" class="mono" style="width:220px">
+      <button type="submit" class="btn-sm">Filter</button>
+      {% if since %}<a href="/observability?tab=spend" class="row-link" style="margin-left:0.4rem">clear</a>{% endif %}
+    </form>
+    {% if window %}<p class="dim small" style="margin-top:0.4rem">{{ window }}</p>{% endif %}
+  </section>
+
+  <div class="cards">
+    {% for c in spend_cards %}
+      {% with label=c.label, value=c.value, detail=c.detail %}{% include "stat_card.html" %}{% endwith %}
+    {% endfor %}
+  </div>
+
+  {% if by_model_rows %}
+  <section class="panel">
+    <h2>By model</h2>
+    <div class="table-wrap">
+    <table class="frag-table">
+      <thead><tr>{% for col in by_model_columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in by_model_rows %}<tr>{% for cell in row %}<td class="mono small">{{ cell }}</td>{% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Recent calls</h2>
+    {% if spend_rows %}
+    <div class="table-wrap">
+    <table class="frag-table">
+      <thead><tr>{% for col in spend_columns %}<th>{{ col }}</th>{% endfor %}</tr></thead>
+      <tbody>
+        {% for row in spend_rows %}<tr>{% for cell in row %}<td class="mono small">{{ cell }}</td>{% endfor %}</tr>{% endfor %}
+      </tbody>
+    </table>
+    </div>
+    {% else %}
+      {% with message='No spend data yet — calls appear after gateway usage.' %}{% include "empty_state.html" %}{% endwith %}
+    {% endif %}
+  </section>
+
+{% else %}
+  {% if session_rows %}
+  <section class="panel">
+    <div class="table-wrap">
+    <table class="agents-table">
+      <thead><tr>{% for col in session_columns %}<th>{{ col }}</th>{% endfor %}<th></th></tr></thead>
+      <tbody>
+        {% for r in session_rows %}
+        <tr>
+          <td class="mono small nowrap" style="font-weight:600">{{ r.id[:8] }}</td>
+          <td><span class="badge accent small">{{ r.runtime }}</span></td>
+          <td class="mono small dim nowrap">{{ r.start }}</td>
+          <td class="mono small dim nowrap">{{ r.end }}</td>
+          <td class="mono small">{{ r.events }}</td>
+          <td class="dim small">{{ r.tools }}</td>
+          <td class="dim small">{{ r.models }}</td>
+          <td class="nowrap"><a href="{{ r.href }}" class="row-link">replay →</a></td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% else %}
+    {% with message='No sessions recorded yet — run an agent to generate one.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endif %}
+{% endif %}
+{% endblock %}

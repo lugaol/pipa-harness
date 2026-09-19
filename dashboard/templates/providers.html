@@ -1,0 +1,48 @@
+{% extends "base.html" %}
+{% block title %}Providers · pipa{% endblock %}
+{% block pagetitle %}Providers{% endblock %}
+{% block pagesubtitle %}API keys and provider readiness — names only, values are never shown.{% endblock %}
+{% block content %}
+
+{% if tested %}<div class="flash {{ 'error' if not test_ok else '' }}">{{ tested }}: {{ test_msg }}</div>{% endif %}
+
+<section class="panel">
+  <div class="table-wrap">
+  <table>
+    <thead><tr><th>Provider</th><th>Type</th><th>Keys</th><th>Models</th><th>State</th><th></th></tr></thead>
+    <tbody>
+      {% for r in rows %}
+      <tr>
+        <td style="font-weight:600">{{ r.label }}</td>
+        <td class="dim small">{{ r.kind }}</td>
+        <td>
+          <div class="chip-row">
+            {% for k in r.key_rows %}
+              {% if k.present %}<span class="badge ok">{{ k.name }}</span>
+              {% else %}<span class="badge warn">{{ k.name }}</span>{% endif %}
+            {% else %}<span class="dim small">no keys required</span>
+            {% endfor %}
+          </div>
+        </td>
+        <td class="mono small">{{ r.models }}{% if not r.discovered %} <span class="dim">(not discovered yet)</span>{% endif %}</td>
+        <td>{% if r.ready %}<span class="badge ok">● ready</span>{% else %}<span class="badge warn">○ needs setup</span>{% endif %}</td>
+        <td class="nowrap">
+          <form method="post" action="/api/providers/test" class="inline-form">
+            <input type="hidden" name="provider" value="{{ r.slug }}">
+            <button type="submit" class="btn-sm">Test</button>
+          </form>
+        </td>
+      </tr>
+      {% else %}
+      <tr><td colspan="6">{% with message='No providers configured.' %}{% include "empty_state.html" %}{% endwith %}</td></tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+
+<section class="panel">
+  <h2>How keys work</h2>
+  <p class="dim small">Set keys in <span class="mono">$PIPA_ROOT/.env</span> (never in shell rc files, never committed). Key <em>values</em> are never displayed or logged — only presence. Saving a key takes effect on the next <span class="mono">pipa up</span> or gateway restart.</p>
+</section>
+{% endblock %}

@@ -1,0 +1,168 @@
+{% extends "base.html" %}
+{% block title %}Knowledge · pipa{% endblock %}
+{% block pagetitle %}Knowledge{% endblock %}
+{% block pagesubtitle %}Vault memory and code graph — one search, every source.{% endblock %}
+{% block content %}
+
+<div class="filter-bar">
+  <span class="tabs">
+    <a href="/knowledge?tab=memory&amp;scope={{ scope }}" {% if tab == 'memory' %}class="active"{% endif %}>Memory</a>
+    <a href="/knowledge?tab=graph&amp;scope={{ scope }}" {% if tab == 'graph' %}class="active"{% endif %}>Graph</a>
+  </span>
+  <span class="tier-switch">
+    <a href="/knowledge?tab={{ tab }}&amp;scope=global" {% if scope == 'global' %}class="active"{% endif %}>Global vault</a>
+    {% if projects %}
+    <a href="/knowledge?tab={{ tab }}&amp;scope=project" {% if scope == 'project' %}class="active"{% endif %}>Project memory</a>
+    {% else %}
+    <span class="tier-disabled">Project memory</span>
+    {% endif %}
+  </span>
+</div>
+
+{% if tab == 'graph' %}
+  <div class="cards">
+    <div class="card stat-card">
+      <div class="stat-label">Graph</div>
+      <div class="stat-value" style="font-size:1.2rem">{{ 'ready' if g_status.has_graph else 'missing' }}</div>
+      <div class="dim small mono">{{ g_status.graph_path or 'graphify-out/graph.json' }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">Nodes</div>
+      <div class="stat-value" style="font-size:1.2rem">{{ g_status.nodes }}</div>
+      <div class="dim small mono">{{ g_status.root or '—' }}</div>
+    </div>
+    <div class="card stat-card">
+      <div class="stat-label">CLI</div>
+      <div class="stat-value" style="font-size:1.2rem">{{ 'installed' if g_status.cli else 'not found' }}</div>
+      <div class="dim small mono">{{ g_status.cli_path or 'graphify' }}</div>
+    </div>
+  </div>
+  {% if not g_status.has_graph %}
+  <div class="flash error">No graph yet — run <code>graphify index .</code> in your project.</div>
+  {% endif %}
+
+  <section class="panel">
+    <h2>Query <span class="text-xs text-muted">· <a href="/graphify" class="row-link">full Graph page →</a></span></h2>
+    <form method="get" action="/knowledge" class="inline-form">
+      <input type="hidden" name="tab" value="graph">
+      <input type="hidden" name="scope" value="{{ scope }}">
+      {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+      <input type="text" name="gq" value="{{ gq }}" placeholder="What does the auth system do?" style="width:380px">
+      <button type="submit" {% if not g_status.has_graph and not g_status.cli %}disabled{% endif %}>Search graph</button>
+    </form>
+
+    {% if g_result is not none %}
+      {% if g_result.cli_out %}
+      <pre class="editor mono small" style="margin-top:0.85rem;max-height:320px;overflow:auto">{{ g_result.cli_out }}</pre>
+      {% endif %}
+      {% if g_result.cli_err %}
+      <div class="flash error" style="margin-top:0.6rem">{{ g_result.cli_err }}</div>
+      {% endif %}
+      {% if g_result.hits %}
+      <div class="table-wrap" style="margin-top:0.6rem">
+      <table class="frag-table">
+        <thead><tr><th>Node</th><th>Type</th><th>Path</th><th>Score</th></tr></thead>
+        <tbody>
+          {% for h in g_result.hits %}
+          <tr><td class="mono small" style="font-weight:600">{{ h.node or h.path or '?' }}</td><td class="dim small">{{ h.type or '—' }}</td><td class="mono dim small path-cell">{{ h.path or '—' }}</td><td class="mono small">{{ h.score or '—' }}</td></tr>
+          {% endfor %}
+        </tbody>
+      </table>
+      </div>
+      {% endif %}
+    {% endif %}
+  </section>
+
+{% else %}
+  {% if projects and scope == 'project' %}
+  <form method="get" action="/knowledge" class="picker" style="margin-bottom:0.85rem">
+    <input type="hidden" name="tab" value="memory">
+    <input type="hidden" name="scope" value="project">
+    <label>Project:</label>
+    <select name="proj" onchange="this.form.submit()">
+      {% for p in projects %}<option value="{{ p['path'] }}" {% if p['path'] == proj %}selected{% endif %}>{{ p['path'].rsplit('/',1)[-1] }}</option>{% endfor %}
+    </select>
+    <noscript><button type="submit" class="btn-sm">Go</button></noscript>
+  </form>
+  {% endif %}
+
+  {% if saved %}<div class="flash">Saved.</div>{% endif %}
+  {% if deleted %}<div class="flash">Deleted.</div>{% endif %}
+  {% if error %}<div class="flash error">{{ error }}</div>{% endif %}
+
+  <section class="panel">
+    <h2>Recall</h2>
+    <p class="dim small" style="margin-bottom:0.5rem">Searches vault notes, memory DB, and code graph in one query.</p>
+    <form method="get" action="/knowledge" class="inline-form">
+      <input type="hidden" name="tab" value="memory">
+      <input type="hidden" name="scope" value="{{ scope }}">
+      {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+      <input type="text" name="q" value="{{ q }}" placeholder="Why did we choose LiteLLM?" style="width:380px">
+      <button type="submit">Search</button>
+    </form>
+    {% if searched %}
+      {% if recall_error %}<div class="flash error" style="margin-top:0.6rem">Recall failed — check vault state.</div>
+      {% elif hits %}
+      <div class="cards" style="margin-top:0.85rem">
+        {% for h in hits %}
+        <div class="card" style="padding:0.75rem 0.9rem">
+          <div style="font-weight:600;font-size:0.88rem">{{ h.title or h.path }}{% if h.expired %} <span class="badge warn small">expired</span>{% endif %}</div>
+          <div class="dim small mono">{{ h.path }} · score {{ h.score or '?' }}{% if h.valid_until %} · until {{ h.valid_until }}{% endif %}</div>
+        </div>
+        {% endfor %}
+      </div>
+      {% else %}<p class="dim small" style="margin-top:0.6rem">No results for "{{ q }}".</p>{% endif %}
+    {% endif %}
+  </section>
+
+  {% for group, rows in groups %}
+  <section class="panel">
+    <div class="panel-head">
+      <h2>{{ group }}</h2>
+      <form method="get" action="/knowledge/edit" class="inline-form">
+        <input type="hidden" name="scope" value="{{ scope }}">
+        <input type="hidden" name="path" value="new">
+        {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+        <input type="text" name="name" placeholder="new-note-name" required style="min-width:180px">
+        <button type="submit" class="btn-sm">New note</button>
+      </form>
+    </div>
+    <div class="table-wrap">
+    <table>
+      <thead><tr><th>Note</th><th>Expiry</th><th>Size</th><th>Updated</th><th></th></tr></thead>
+      <tbody>
+        {% for n in rows %}
+        <tr>
+          <td><span style="font-weight:600;font-size:0.86rem">{{ n.title }}</span><br><span class="dim mono small">{{ n.path_rel }}</span></td>
+          <td>{% if n.expired %}<span class="badge warn small">expired</span>{% elif n.valid_until %}<span class="badge small">{{ n.valid_until }}</span>{% else %}<span class="dim small">—</span>{% endif %}</td>
+          <td class="dim small mono nowrap">{{ n.size_h }}</td>
+          <td class="dim small mono nowrap">{{ n.mtime_h or '—' }}</td>
+          <td class="nowrap">
+            <a href="/knowledge/edit?scope={{ scope }}&amp;path={{ n.path_rel }}{% if proj %}&amp;proj={{ proj }}{% endif %}" class="row-link">Edit</a>
+            <form method="post" action="/knowledge/expiry" class="inline-form">
+              <input type="hidden" name="tier" value="{{ scope }}">
+              <input type="hidden" name="path" value="{{ n.path_rel }}">
+              {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+              <input type="hidden" name="action" value="extend">
+              <button type="submit" class="btn-sm secondary">+1y</button>
+            </form>
+            <form method="post" action="/knowledge/delete" class="inline-form"
+                  onsubmit="return confirm('Delete {{ n.path_rel }}?')">
+              <input type="hidden" name="tier" value="{{ scope }}">
+              <input type="hidden" name="path" value="{{ n.path_rel }}">
+              {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
+              <button type="submit" class="btn-sm danger">Delete</button>
+            </form>
+          </td>
+        </tr>
+        {% endfor %}
+      </tbody>
+    </table>
+    </div>
+  </section>
+  {% else %}
+    {% with message='No notes in this scope yet.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endfor %}
+  {% if expired_count %}<p class="dim small" style="margin-top:0.4rem">{{ expired_count }} expired note(s) — flagged but not removed.</p>{% endif %}
+{% endif %}
+{% endblock %}

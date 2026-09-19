@@ -1,23 +1,19 @@
-"""Graph page: graphify knowledge-graph status + query UI."""
+"""Redirect: /graph -> /knowledge?tab=graph (backwards compat)."""
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from urllib.parse import quote
 
-from data import graph as graph_data
-from . import render
+from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 
 router = APIRouter()
 
 
 @router.get("/graph")
 def graph_view(request: Request, q: str = "", proj: str = ""):
-    st = graph_data.status(proj or None)
-    result = graph_data.query(q, proj or None) if q.strip() else None
-    return render(
-        request,
-        "graph.html",
-        status=st,
-        q=(q or "").strip(),
-        result=result,
-        proj=proj,
-    )
+    params = "?tab=graph&scope=global"
+    if q.strip():
+        params += f"&gq={quote(q.strip())}"
+    if proj:
+        params += f"&proj={quote(proj)}"
+    return RedirectResponse(url=f"/knowledge{params}", status_code=307)

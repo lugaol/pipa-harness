@@ -1,0 +1,38 @@
+/* Tables, badges and .env-key rows (shared by several pages). Extracted
+   verbatim from the former inline <style> block of static/index.html. */
+.agents-table-wrapper { overflow-x: auto; border-radius: var(--radius-lg); border: 1px solid var(--border-subtle); -webkit-overflow-scrolling: touch; }
+.agents-table { width: 100%; min-width: 820px; border-collapse: collapse; font-size: 13px; }
+.agents-table thead th {
+  background: var(--bg-surface); padding: var(--sp-3) var(--sp-4); text-align: left; font-size: 11px; font-weight: 600;
+  text-transform: uppercase; letter-spacing: 0.8px; color: var(--text-muted); border-bottom: 1px solid var(--border-subtle); white-space: nowrap;
+}
+.agents-table th, .agents-table td { min-width: 0; }
+.agents-table tbody tr { transition: background var(--duration-fast) var(--ease-out); }
+.agents-table tbody tr:hover { background: var(--bg-hover); }
+.agents-table tbody tr:last-child td { border-bottom: none; }
+.agents-table tbody td { padding: var(--sp-3) var(--sp-4); border-bottom: 1px solid var(--border-subtle); vertical-align: middle; }
+.agent-name { font-weight: 600; font-size: 13px; display: flex; align-items: center; gap: var(--sp-2); word-break: break-word; min-width: 0; }
+.agent-path { font-family: var(--font-mono); font-size: 11px; color: var(--text-muted); margin-top: 2px; word-break: break-all; overflow-wrap: anywhere; }
+.agent-desc { color: var(--text-secondary); font-size: 12px; word-break: break-word; }
+.mode-badge {
+  display: inline-flex; padding: 2px 8px; border-radius: 12px; font-size: 11px; font-weight: 600;
+  background: rgba(99,102,241,0.12); color: var(--accent-secondary); border: 1px solid rgba(99,102,241,0.2); white-space: nowrap;
+}
+.drift-badge {
+  display: inline-flex; align-items: center; gap: 4px; padding: 2px 8px; border-radius: 12px; font-size: 10px; font-weight: 700;
+  text-transform: uppercase; letter-spacing: 0.4px; white-space: nowrap;
+}
+.drift-badge.ok    { background: rgba(34,197,94,0.12); color: var(--accent-green); }
+.drift-badge.drift { background: rgba(234,179,8,0.12); color: var(--accent-yellow); }
+.drift-badge.working { background: rgba(59,130,246,0.14); color: #60a5fa; }
+.drift-badge.off    { background: rgba(148,163,184,0.12); color: var(--text-muted); }
+
+.env-input-wrap { display: flex; gap: 6px; flex: 1; min-width: 0; align-items: center; }
+.env-input-wrap input { flex: 1; min-width: 0; background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border-default); border-radius: var(--radius-sm); padding: 6px 10px; font-size: 12px; font-family: var(--font-mono); }
+.env-group-row td { padding: 6px 10px !important; background: rgba(255,255,255,0.04); font-weight: 600; font-size: 11px; letter-spacing: 0.06em; text-transform: uppercase; color: #9ca3af; }
+.env-edit-row td { padding: 8px 10px !important; background: rgba(59,130,246,0.06); }
+.env-value { display: inline-block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; max-width: 280px; vertical-align: bottom; }
+
+@media (max-width: 640px) {
+  .model-select-row select, .model-select-row input, .model-select-row button { width: 100%; }
+}

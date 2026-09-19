@@ -1,0 +1,10 @@
+{
+  "name": "example",
+  "enabled": false,
+  "mcp": {
+    "type": "local",
+    "command": "npx",
+    "args": ["-y", "@example/mcp-server"],
+    "env_note": "set EXAMPLE_TOKEN in ~/.pipa-harness/.env"
+  }
+}

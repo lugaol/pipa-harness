@@ -1,0 +1,51 @@
+# models/providers.yaml — provider wiring (declarative, no code).
+# The model lists themselves always come from the wire (state/model_catalog.json).
+# Adding a provider = adding an entry here. No Python change needed.
+
+providers:
+  - slug: ollama
+    label: Ollama
+    kind: local
+    requires: []
+    list_url: http://localhost:11434/v1/models
+    needs_key_for_list: false
+    keep: local_only          # !:cloud — local installs are the free tier
+    litellm:
+      model: "openai/{id}"
+      api_base: http://localhost:11434/v1
+      api_key: ollama
+      custom_llm_provider: openai
+
+  - slug: opencode-zen
+    label: OpenCode Zen Free
+    kind: cloud
+    requires: [OPENCODE_ZEN_API_KEY]
+    list_url: https://opencode.ai/zen/v1/models
+    keep: zen_free            # *-free
+    litellm:
+      model: "openai/{id}"
+      api_base: https://opencode.ai/zen/v1
+      api_key: os.environ/OPENCODE_ZEN_API_KEY
+
+  - slug: openrouter
+    label: OpenRouter Free
+    kind: cloud
+    requires: [OPENROUTER_API_KEY]
+    list_url: https://openrouter.ai/api/v1/models
+    needs_key_for_list: false
+    keep: free                # *:free
+    litellm:
+      model: "openrouter/{id}"
+      api_key: os.environ/OPENROUTER_API_KEY
+
+  - slug: kilo
+    label: Kilo Free
+    kind: cloud
+    requires: [KILO_API_KEY]
+    list_url: https://api.kilo.ai/api/gateway/v1/models
+    keep: kilo_free           # *:free or kilo-auto/free
+    litellm:
+      model: "{id}"
+      custom_llm_provider: openai
+      api_base: https://api.kilo.ai/api/gateway
+      api_key: os.environ/KILO_API_KEY

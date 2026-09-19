@@ -237,6 +237,40 @@ def tier_assignments() -> Dict[str, str]:
     return {t: clean[t] for t in TIER_ALIASES if t in clean}
 
 
+def apply_tiers(assignments: dict) -> Tuple[bool, str, list]:
+    """Validate + persist a {tier: alias} batch in one call.
+
+    Single owner for batch tier writes — both dashboard batch endpoints
+    (`PUT /api/tier-models`, `POST /api/tiers/batch`) call this instead of
+    looping `set_tier_assignment` themselves. Returns (ok, msg, warnings);
+    warnings name models whose API key is missing (saved anyway).
+    """
+    from pipa.providers import missing_keys
+
+    if not isinstance(assignments, dict) or not assignments:
+        return False, "tiers must be a non-empty mapping of tier -> model", []
+    unknown = [t for t in assignments if normalize_tier(t) not in TIER_ALIASES]
+    if unknown:
+        return False, f"unknown tier: {', '.join(unknown)}", []
+    known = set(by_alias())
+    for tier, alias in assignments.items():
+        model = (alias or "").strip()
+        if not model:
+            return False, f"tier {tier} needs a model", []
+        if model not in known:
+            return False, f"unknown model {model!r} - not in the model catalog", []
+    warnings = []
+    for tier, alias in assignments.items():
+        model = alias.strip()
+        ok, msg = set_tier_assignment(normalize_tier(tier), model)
+        if not ok:
+            return False, msg, []
+        missing = missing_keys(model)
+        if missing:
+            warnings.append(f"{model} needs {', '.join(missing)}")
+    return True, "saved", warnings
+
+
 def set_tier_assignment(tier: str, alias: str) -> Tuple[bool, str]:
     """Assign one tier to a discovered model (alias) — or clear with ''.
 
@@ -376,4 +410,43 @@ def runtime_model_list() -> List[Dict[str, str]]:
         extras.append((e.slug, e.display))
     for mid, name in sorted(extras):
         add(mid, name)
+    return out
+
+
+def tier_policy() -> Dict[str, dict]:
+    """Descriptive policy per tier from models/tiers.yaml (labels, budgets).
+
+    Returns {tier: {label, description, cost_ceiling_usd_per_1m,
+    latency_target_ms, min_context, max_steps}}; {} when unreadable.
+    Assignments are NOT here — see tier_assignments().
+    """
+    try:
+        import yaml
+    except ImportError:
+        return {}
+    try:
+        raw = yaml.safe_load(
+            (config.models_dir() / "tiers.yaml").read_text()) or {}
+    except Exception:
+        return {}
+    tiers = raw.get("tiers") or {}
+    return {t: tiers[t] for t in TIER_ALIASES if isinstance(tiers.get(t), dict)}
+
+
+def agent_tier_defaults() -> Dict[str, str]:
+    """{agent -> default tier} from models/tiers.yaml agent_tiers (validated)."""
+    try:
+        import yaml
+    except ImportError:
+        return {}
+    try:
+        raw = yaml.safe_load(
+            (config.models_dir() / "tiers.yaml").read_text()) or {}
+    except Exception:
+        return {}
+    out: Dict[str, str] = {}
+    for agent, tier in (raw.get("agent_tiers") or {}).items():
+        t = normalize_tier(str(tier))
+        if t:
+            out[str(agent)] = t
     return out

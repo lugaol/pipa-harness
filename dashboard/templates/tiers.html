@@ -1,0 +1,46 @@
+{% extends "base.html" %}
+{% block title %}Tier Manager · pipa{% endblock %}
+{% block pagetitle %}Tier Manager{% endblock %}
+{% block pagesubtitle %}pick the model for each tier; agent assignments live on the <a href="/agents">Agents</a> page. Saves apply immediately: assignments → gateway config → gateway restart.{% endblock %}
+{% block pagecss %}
+<link rel="stylesheet" href="/static/css/tables.css">
+{% endblock %}
+{% block content %}
+<section id="tiers-page">
+  <section id="tiers-section">
+    <div class="card-header">
+      <div class="flex gap-2">
+        <button class="btn btn-primary btn-sm" onclick="saveTierModels()">Save tier models</button>
+        <button class="btn btn-secondary btn-sm" onclick="rebuildTierConfig()">Rebuild + restart</button>
+      </div>
+    </div>
+    <p class="text-xs text-muted" style="margin:8px 0">Saves apply immediately: assignments → gateway config → gateway restart, no <code class="mono">pipa up</code> needed.</p>
+    <div class="agents-table-wrapper">
+      <table class="agents-table">
+        <thead>
+          <tr><th>Tier</th><th>Model</th><th>Max steps</th></tr>
+        </thead>
+        <tbody id="tier-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+
+  <section id="tier-catalog-section" style="margin-top:var(--sp-6, 24px)">
+    <div class="card-header">
+      <div>
+        <h3>Model catalog</h3>
+        <span class="text-xs text-muted">every discovered model — “tier” marks the tiers currently assigned to it</span>
+      </div>
+    </div>
+    <div class="agents-table-wrapper">
+      <table class="agents-table">
+        <thead>
+          <tr><th>Model id</th><th>Name</th><th>Tier</th><th>Provider</th></tr>
+        </thead>
+        <tbody id="tier-catalog-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}
+{% block pagescript %}<script src="/static/js/pages/tiers.js"></script>{% endblock %}

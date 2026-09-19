@@ -32,7 +32,7 @@ def list_servers() -> List[dict]:
         return []
     for d in dirs:
         cfg = d / "config.json"
-        if not d.is_dir() or not cfg.is_file():
+        if not d.is_dir() or d.name.startswith("_") or not cfg.is_file():
             continue
         try:
             data = json.loads(cfg.read_text())

@@ -1,304 +1,42 @@
-"""pipa — single CLI entrypoint for the harness.
-
-  pipa init [--runtime R] [--type T]   scaffold .pipa/ in the current project
-  pipa up [--runtime R] [--no-pull] [--no-apps]   install tools, start services
-  pipa stop                            stop services started by pipa
-  pipa status [--json]                 health check (gate-friendly exit code)
-  pipa install <component...>          selective install (uv ollama litellm
-                                       graphify dsh opencode apps | all)
-  pipa runtime list|show|set <name>    inspect/switch the project runtime
-  pipa migrate                         legacy .harness_extension/ -> .pipa/
-  pipa hook <event> [args...]          append to the shared NDJSON session log
-  pipa replay [SID] [--log P]          flight-recorder: replay one session
-  pipa diff A B [--log P]              compare two recorded sessions
-  pipa recall "query"                  one query over vault+memory.db+graph
-  pipa spend [--since TS] [--json]     token/cost ledger from the gateway
-  pipa eval [args...]                  run agent evals (tools/evals)
-
-Runtimes: opencode, deepseek-harness, auto (prefers deepseek-harness).
-"""
+"""pipa — CLI entrypoint (arg parsing + dispatch; logic lives in pipa/commands/)."""
 from __future__ import annotations
 
 import argparse
-import json
-import subprocess
 import sys
-import time
 from pathlib import Path
 
-from . import __version__, config, hooks, runtime as runtimes, scaffold, services, session
+from . import __version__, config
+from .commands.eval import cmd_eval
+from .commands.doctor import cmd_doctor
+from .commands.lifecycle import build_subparsers as lifecycle_parsers
+from .commands.usage import build_subparser as usage_parser
+from .commands.memory_gc import build_subparser as memory_gc_parser
+from .commands.triage import build_subparser as triage_parser
+from .commands.init import cmd_init
+from .commands.install import INSTALL_COMPONENTS, cmd_install
+from .commands.recall import cmd_recall
+from .commands.replay import cmd_diff, cmd_replay
+from .commands.runtime import cmd_runtime
+from .commands.spend import cmd_spend
+from .commands.status import cmd_status
+from .commands.up import cmd_up
+from . import hooks, runtime as runtimes, scaffold, services
 
 
-def _say(msg: str = "") -> None:
-    print(msg)
-
-
-def _die(msg: str, code: int = 1) -> "None":
+def _die(msg: str, code: int = 1) -> None:
     print(f"ERROR: {msg}", file=sys.stderr)
     sys.exit(code)
-
-
-# ── init ────────────────────────────────────────────────────────────────────
-
-def cmd_init(args) -> int:
-    target = Path(args.path).resolve() if args.path else (config.git_root() or Path.cwd())
-    if args.fill_only:
-        facts = scaffold.fill_agents_md(target)
-        if not facts:
-            _die(f"no AGENTS.md found in {target}")
-        _say(f"Filled AGENTS.md: name={facts['name']} build={facts['build']} test={facts['test']}")
-        return 0
-    try:
-        actions = scaffold.init_project(target, args.runtime, args.type)
-    except (scaffold.ScaffoldError, runtimes.RuntimeError_) as e:
-        _die(str(e))
-    _say(f"pipa init — {target}")
-    for a in actions:
-        _say(f"  {a}")
-    name = runtimes.project_runtime(target)
-    _say("")
-    _say("Done. Next steps:")
-    _say("  1. Start services:   pipa up")
-    _say("  2. Health check:     pipa status")
-    _say(f"  3. Start runtime:    {'opencode' if name == 'opencode' else 'deepseek-harness (dsh web — npm i -g @deepseek-ai/dsh)'}")
-    _say("  4. Review .pipa/AGENTS.md and add project-specific golden rules.")
-    return 0
-
-
-# ── up / stop / status ──────────────────────────────────────────────────────
-
-def cmd_up(args) -> int:
-    root = config.harness_root()
-    rep = services.Reporter("up")
-
-    # Model lists are dynamic — discover from providers before composing.
-    try:
-        from pipa.providers import refresh as discover_models
-
-        summary = discover_models(timeout=6)
-        found = sum(len(p.get("models") or []) for p in summary["providers"].values())
-        failed = [s for s, p in summary["providers"].items() if not p.get("ok")]
-        rep.ok(f"discovered {found} models from providers" + (
-            f" (unreachable: {', '.join(failed)})" if failed else ""))
-    except Exception as e:  # noqa: BLE001 — never block `pipa up` on discovery
-        rep.warn(f"model discovery failed ({e}); using last known catalog")
-
-    # First-run convenience: give every tier a working default so runtimes
-    # and agent frontmatter resolve immediately. User-owned afterwards.
-    try:
-        from pipa.model_registry import seed_default_tiers
-
-        seeded = seed_default_tiers()
-        if seeded:
-            rep.ok("seeded default tier assignments (change on dashboard Models page)")
-            for tier, alias in sorted(seeded.items()):
-                _say(f"       {tier:<7} -> {alias}")
-    except Exception:
-        pass
-
-    litellm_cfg, warn = config.pick_litellm_config(root)
-    if warn:
-        rep.warn(warn)
-
-    _say(f"pipa up — {services.OS}/{services.ARCH} (root: {root})")
-    _say("")
-
-    services.ensure_uv(rep)
-    services.ensure_python_deps(rep)
-    services.ensure_ollama(rep)
-    services.ensure_litellm(rep)
-    services.ensure_graphify(rep)
-
-    rt_name = runtimes.resolve(args.runtime)
-    ok, msg = runtimes.ensure_installed(rt_name)
-    (rep.ok if ok else rep.warn)(msg)
-    services.ensure_obsidian(rep, gui=not args.no_apps)
-    services.ensure_emdash(rep, gui=not args.no_apps)
-    dashboard_up = services.ensure_dashboard(rep, root)
-
-    _say("")
-    services.start_ollama(rep)
-    if not args.no_pull:
-        services.pull_models(rep, litellm_cfg, root)
-    services.start_litellm(rep, litellm_cfg)
-
-    _say("")
-    services.persist_path(rep, root)
-
-    # scaffold the current project when inside a foreign git repo
-    target = config.git_root()
-    if target and target != root:
-        pipa_dir = config.pipa_dir(target)
-        if not pipa_dir.exists():
-            rep.add(f"scaffolding project in {target}")
-            try:
-                for a in scaffold.init_project(target, rt_name):
-                    _say(f"  {a}")
-            except scaffold.ScaffoldError as e:
-                rep.warn(str(e))
-        else:
-            for a in runtimes.wire(runtimes.project_runtime(target), target, root):
-                _say(f"  {a}")
-            failed = [m for ok_, m in scaffold.check_extension(target) if not ok_]
-            if failed:
-                rep.warn(f"extension health: {len(failed)} issue(s) — run `pipa status`")
-
-    _say("")
-    _say("Verifying...")
-    cmd_status(args)
-    readiness = _readiness(root, rt_name)
-    if readiness:
-        _say("")
-        _say("Readiness:")
-        for ok, label in readiness:
-            mark = "✓" if ok else "✗"
-            _say(f"  [{mark}] {label}")
-        if not all(ok for ok, _ in readiness):
-            _say("  Fix ✗ rows above, then re-run `pipa up`.")
-    _say("")
-    _say("Done.")
-    if dashboard_up:
-        _say(f"  Dashboard: http://localhost:{config.DASHBOARD_PORT}")
-    _say(f"  Logs: {config.state_dir()}/litellm.log · {config.state_dir()}/ollama.log    Stop: pipa stop")
-    return 0
-
-
-def _readiness(root: Path, rt_name: str) -> list[tuple[bool, str]]:
-    """`pipa up` closing checklist — what works now, what needs a human."""
-    out: list[tuple[bool, str]] = []
-    try:
-        from pipa.model_registry import tier_assignments
-
-        tiers = tier_assignments()
-        out.append((bool(tiers),
-                    f"tier aliases assigned ({', '.join(sorted(tiers)) or 'NONE — agents cannot pick models'})"))
-    except Exception:
-        pass
-    try:
-        from urllib.request import Request, urlopen
-
-        req = Request(f"{config.LITELLM_URL}/v1/models",
-                      headers={"Authorization": f"Bearer {config.LITELLM_KEY}"})
-        with urlopen(req, timeout=5):
-            gateway = True
-    except Exception:
-        gateway = False
-    out.append((gateway, f"gateway serving at {config.LITELLM_URL}"))
-    project = config.git_root()
-    graph = (project or root) / "graphify-out" / "graph.json"
-    if not graph.is_file():
-        graph = root / "graphify-out" / "graph.json"
-    out.append((graph.is_file(),
-                "code graph indexed"
-                + ("" if graph.is_file() else f" — run: cd {(project or root)} && graphify index .")))
-    if rt_name == "opencode":
-        plugin = Path.home() / ".config" / "opencode" / "plugin" / "pipa-session-bus.js"
-        out.append((plugin.is_file(),
-                    "session bus wired (opencode plugin)"
-                    + ("" if plugin.is_file() else " — re-run `pipa runtime set opencode`")))
-    return out
 
 
 def cmd_stop(args) -> int:
     stopped = services.stop_services()
     if stopped:
         for s in stopped:
-            _say(f"  [ok] {s} stopped")
+            print(f"  [ok] {s} stopped")
     else:
-        _say("No pipa services were running.")
+        print("No pipa services were running.")
     return 0
 
-
-def cmd_status(args) -> int:
-    root = config.harness_root()
-    checks: list[dict] = []
-
-    def check(name: str, ok: bool, detail: str = "") -> None:
-        checks.append({"name": name, "status": "pass" if ok else "fail", "detail": detail})
-
-    # LiteLLM gateway
-    models: list[str] = []
-    url = f"{config.LITELLM_URL}/v1/models"
-    import urllib.request
-    req = urllib.request.Request(url, headers={"Authorization": f"Bearer {config.LITELLM_KEY}"})
-    try:
-        with urllib.request.urlopen(req, timeout=5) as r:
-            models = [m["id"] for m in json.load(r).get("data", [])]
-        check("litellm", True, f"{len(models)} models: {', '.join(models[:4])}")
-    except Exception:
-        check("litellm", False, "gateway not reachable")
-
-    # runtimes
-    found = runtimes.installed()
-    check("runtime", bool(found), f"installed: {', '.join(found)}" if found else "no runtime on PATH")
-
-    # graphify
-    check("graphify-cli", services.have("graphify"), "installed" if services.have("graphify") else "not on PATH")
-
-    # project checks
-    project = config.find_project()
-    if project and project != root and config.pipa_dir(project).exists():
-        rt = runtimes.read_project_runtime(project) or "auto"
-        check("project", True, f"{project} (runtime: {rt})")
-        for ok, msg in scaffold.check_extension(project):
-            check(f"ext:{msg.split(' ')[0]}", ok, msg)
-        g = project / "graphify-out" / "graph.json"
-        check("graphify-graph", g.exists(),
-              "graph.json present" if g.exists() else "no graph yet — run: graphify extract .")
-        log = config.session_log_path(project)
-        if log.exists():
-            s = session.stats(log)
-            check("session-log", True, f"{s['events']} events, last: {s['last_ts']}")
-    else:
-        check("project", config.git_root() is not None,
-              "not inside a pipa project" if project == root else "not a git repo")
-
-    summary = {
-        "pass": sum(1 for c in checks if c["status"] == "pass"),
-        "fail": sum(1 for c in checks if c["status"] == "fail"),
-    }
-    if getattr(args, "json", False):
-        print(json.dumps({"checks": checks, "summary": summary, "timestamp": time.time()}))
-    else:
-        for c in checks:
-            mark = "PASS" if c["status"] == "pass" else "FAIL"
-            _say(f"  [{mark}] {c['name']}: {c['detail']}")
-        _say(f"\n  {summary['pass']} pass, {summary['fail']} fail")
-    return 0 if summary["fail"] == 0 else 1
-
-
-# ── runtime ─────────────────────────────────────────────────────────────────
-
-def cmd_runtime(args) -> int:
-    if args.runtime_cmd == "list":
-        for name in runtimes.names():
-            rt = runtimes.RUNTIMES[name]
-            mark = "installed" if rt.installed() else "not installed"
-            _say(f"  {name:<18} {rt.label:<18} {mark}")
-        return 0
-    project = config.find_project()
-    if not project or not config.pipa_dir(project).exists():
-        _die("not inside a pipa project (run `pipa init` first)")
-    if args.runtime_cmd == "show" or args.runtime_cmd is None:
-        current = runtimes.read_project_runtime(project)
-        _say(f"project:  {project}")
-        _say(f"runtime:  {current or '(auto)'} -> {runtimes.project_runtime(project)}")
-        return 0
-    if args.runtime_cmd == "set":
-        try:
-            runtimes.write_project_runtime(project, args.name)
-        except runtimes.RuntimeError_ as e:
-            _die(str(e))
-        root = config.harness_root()
-        actions = runtimes.wire(args.name, project, root)
-        _say(f"runtime set to '{args.name}' in {project}")
-        for a in actions:
-            _say(f"  {a}")
-        return 0
-    _die(f"unknown runtime subcommand: {args.runtime_cmd}", code=2)
-
-
-# ── migrate ─────────────────────────────────────────────────────────────────
 
 def cmd_migrate(args) -> int:
     target = Path(args.path).resolve() if args.path else (config.git_root() or Path.cwd())
@@ -306,210 +44,12 @@ def cmd_migrate(args) -> int:
         actions = scaffold.migrate_project(target)
     except scaffold.ScaffoldError as e:
         _die(str(e))
-    _say(f"pipa migrate — {target}")
+    print(f"pipa migrate — {target}")
     for a in actions:
-        _say(f"  {a}")
-    _say("\nMigrated to .pipa/. Run `pipa status` to verify.")
+        print(f"  {a}")
+    print("\nMigrated to .pipa/. Run `pipa status` to verify.")
     return 0
 
-
-# ── eval ────────────────────────────────────────────────────────────────────
-
-def cmd_eval(args) -> int:
-    script = config.harness_root() / "tools" / "evals" / "run.py"
-    if not script.exists():
-        _die(f"eval runner not found: {script}")
-    return subprocess.run([sys.executable, str(script), *args.eval_args]).returncode
-
-
-# ── install ─────────────────────────────────────────────────────────────────
-
-def _install_runtime(name: str):
-    def go(rep) -> None:
-        ok, msg = runtimes.ensure_installed(name)
-        (rep.ok if ok else rep.warn)(msg)
-    return go
-
-
-INSTALL_COMPONENTS = {
-    "uv": lambda rep: services.ensure_uv(rep),
-    "py-deps": lambda rep: services.ensure_python_deps(rep),
-    "ollama": lambda rep: services.ensure_ollama(rep),
-    "litellm": lambda rep: services.ensure_litellm(rep),
-    "graphify": lambda rep: services.ensure_graphify(rep),
-    "dsh": _install_runtime("deepseek-harness"),
-    "opencode": _install_runtime("opencode"),
-    "apps": lambda rep: (
-        services.ensure_obsidian(rep),
-        services.ensure_emdash(rep),
-    ),
-}
-
-
-def cmd_install(args) -> int:
-    rep = services.Reporter("install")
-    components = list(INSTALL_COMPONENTS) if args.component == ["all"] else args.component
-    unknown = [c for c in components if c not in INSTALL_COMPONENTS]
-    if unknown:
-        _die(f"unknown component(s): {', '.join(unknown)} "
-             f"(choose: {', '.join(INSTALL_COMPONENTS)}, all)")
-    for c in components:
-        INSTALL_COMPONENTS[c](rep)
-    return 0
-
-
-# ── flight recorder (replay / diff) ────────────────────────────────────────
-
-def _session_log(args) -> Path:
-    if getattr(args, "log", None):
-        return Path(args.log).expanduser()
-    project = config.find_project()
-    if project:
-        return config.session_log_path(project)
-    return config.state_dir() / config.SESSION_LOG
-
-
-def _parse_ts(ts: str | None) -> float:
-    if not ts:
-        return 0.0
-    try:
-        from datetime import datetime
-        return datetime.fromisoformat(ts).timestamp()
-    except ValueError:
-        return 0.0
-
-
-def _replay_lines(events: list[dict]) -> list[str]:
-    t0 = _parse_ts(events[0].get("ts")) if events else 0.0
-    lines = []
-    for e in events:
-        off = _parse_ts(e.get("ts")) - t0
-        ev = e.get("event", "?")
-        head = f"  +{off:6.1f}s  {ev:<14}"
-        detail = e.get("tool") or e.get("model") or ""
-        payload = e.get("payload") or e.get("text") or ""
-        if payload:
-            payload = str(payload).replace("\n", " ")
-            payload = payload[:70] + "…" if len(payload) > 70 else payload
-            detail = f"{detail}  {payload}" if detail else payload
-        meta = ", ".join(
-            f"{k}={e[k]}" for k in ("tokens_in", "tokens_out", "cost_usd")
-            if e.get(k) is not None
-        )
-        if meta:
-            detail = f"{detail}  ({meta})" if detail else meta
-        lines.append(head + (f" {detail}" if detail else ""))
-    return lines
-
-
-def cmd_replay(args) -> int:
-    log = _session_log(args)
-    all_sessions = session.sessions(log)
-    if not all_sessions:
-        _say(f"no sessions in {log}")
-        return 1
-    sid = args.session or all_sessions[-1]["id"]
-    events = session.load_session(log, sid)
-    if not events:
-        known = ", ".join(s["id"] for s in all_sessions[-8:])
-        _die(f"no session '{sid}' in {log} (recent: {known})")
-    s = next(x for x in all_sessions if x["id"] == sid)
-    dur = (_parse_ts(s["end"]) - _parse_ts(s["start"])) if s["end"] else 0.0
-    tools = ",".join(sorted(s["tools"])) or "-"
-    models = ",".join(sorted(s["models"])) or "-"
-    _say(
-        f"session {s['id']} · runtime={s['runtime'] or '?'} · "
-        f"{s['events']} events · {dur:.0f}s · tools[{tools}] · models[{models}]"
-    )
-    for line in _replay_lines(events):
-        _say(line)
-    return 0
-
-
-def cmd_diff(args) -> int:
-    log = _session_log(args)
-    a_events = session.load_session(log, args.a)
-    b_events = session.load_session(log, args.b)
-    if not a_events or not b_events:
-        known = ", ".join(s["id"] for s in session.sessions(log)[-8:])
-        _die(f"unknown session id(s) in {log} (recent: {known})")
-
-    def profile(evs: list[dict]) -> dict:
-        tools: set = set()
-        models: set = set()
-        tokens = 0
-        for e in evs:
-            if e.get("tool"):
-                tools.add(e["tool"])
-            if e.get("model"):
-                models.add(e["model"])
-            tokens += int(e.get("tokens_in") or 0) + int(e.get("tokens_out") or 0)
-        dur = _parse_ts(evs[-1].get("ts")) - _parse_ts(evs[0].get("ts"))
-        return {
-            "events": len(evs), "dur": max(dur, 0.0),
-            "tools": tools, "models": models, "tokens": tokens,
-        }
-
-    pa, pb = profile(a_events), profile(b_events)
-    _say(f"diff {args.a} vs {args.b}  ({log})")
-    rows = [
-        ("events", pa["events"], pb["events"]),
-        ("duration_s", round(pa["dur"], 1), round(pb["dur"], 1)),
-        ("tokens", pa["tokens"], pb["tokens"]),
-    ]
-    for name, va, vb in rows:
-        va_s = str(va) if va != "" else "-"
-        vb_s = str(vb) if vb != "" else "-"
-        mark = "=" if va == vb else ("A" if vb < va else "B")
-        _say(f"  {name:<12} A={va_s:<12} B={vb_s:<12} -> {mark}")
-    only_a = sorted(pa["tools"] - pb["tools"])
-    only_b = sorted(pb["tools"] - pa["tools"])
-    _say(f"  tools only-A {only_a or '-'} · only-B {only_b or '-'}")
-    ma, mb = sorted(pa["models"]), sorted(pb["models"])
-    _say(f"  models       A={ma or '-'} · B={mb or '-'}")
-    return 0
-
-
-# ── memory plane (recall) ───────────────────────────────────────────────────
-
-def cmd_recall(args) -> int:
-    from .recall import recall as do_recall
-    out = do_recall(args.query, project=config.find_project(), limit=args.limit)
-    if not out["results"]:
-        _say(f'nothing recalled for "{args.query}" '
-             f"(sources: {', '.join(out['sources_queried']) or 'none'})")
-        return 1
-    _say(f'recall "{args.query}" — sources: {", ".join(out["sources_queried"])}')
-    cur = None
-    for hit in out["results"]:
-        if hit["source"] != cur:
-            cur = hit["source"]
-            _say(f"\n  [{cur}]")
-        flag = " EXPIRED" if hit["expired"] else ""
-        loc = f" @ {hit['path']}" if hit.get("path") else ""
-        _say(f"   - {hit['title']}{flag}{loc}")
-        if hit.get("detail"):
-            _say(f"       {hit['detail'][:100]}")
-    return 0
-
-
-# ── spend ledger ────────────────────────────────────────────────────────────
-
-def cmd_spend(args) -> int:
-    from .spend import summarize, format_report, default_path
-    path = (
-        Path(args.log).expanduser() if getattr(args, "log", None)
-        else default_path()
-    )
-    summary = summarize(path, since=args.since)
-    if args.json:
-        print(json.dumps(summary, indent=2))
-    else:
-        _say(format_report(summary))
-    return 0
-
-
-# ── argparse ────────────────────────────────────────────────────────────────
 
 def build_parser() -> argparse.ArgumentParser:
     p = argparse.ArgumentParser(prog="pipa", description=__doc__,
@@ -539,6 +79,15 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_status)
 
+    sp = sub.add_parser("doctor", help="tier-system + gateway diagnostics (exit 1 on hard errors)")
+    sp.add_argument("--json", action="store_true")
+    sp.set_defaults(func=cmd_doctor)
+
+    lifecycle_parsers(sub)
+    usage_parser(sub)
+    memory_gc_parser(sub)
+    triage_parser(sub)
+
     sp = sub.add_parser("runtime", help="inspect or switch the project runtime")
     sp.add_argument("runtime_cmd", nargs="?", choices=["list", "show", "set"], default="show")
     sp.add_argument("name", nargs="?", choices=runtimes.names())
@@ -548,8 +97,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--path", help="project root (default: git root / cwd)")
     sp.set_defaults(func=cmd_migrate)
 
-    sp = sub.add_parser("hook", help="append to the shared NDJSON session log")
-    sp.add_argument("hook_args", nargs=argparse.REMAINDER)
+    sp = sub.add_parser("hook", help="append to the shared NDJSON session log (internal)")
     sp.set_defaults(func=lambda a: hooks.main(a.hook_args))
 
     sp = sub.add_parser("eval", help="run agent evals")
@@ -558,7 +106,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("install", help="install harness components")
     sp.add_argument("component", nargs="+",
-                    help="uv py-deps ollama litellm graphify dsh opencode apps | all")
+                    help="uv py-deps ollama litellm graphify dsh opencode apps verify | all")
     sp.set_defaults(func=cmd_install)
 
     sp = sub.add_parser("replay", help="replay a session from the flight recorder")
@@ -572,9 +120,13 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--log", help="session log path (default: project bus)")
     sp.set_defaults(func=cmd_diff)
 
-    sp = sub.add_parser("recall", help='one query over vault + memory.db + code graph')
-    sp.add_argument("query")
+    sp = sub.add_parser("recall", help="one query over vault + memory.db + code graph")
+    sp.add_argument("query", nargs="?")
     sp.add_argument("--limit", type=int, default=8)
+    sp.add_argument("--stale", action="store_true",
+                    help="report stale notes (expired/untouched/over-budget), no query needed")
+    sp.add_argument("--digest", action="store_true",
+                    help="compact bounded digest for the memory-context plugin")
     sp.set_defaults(func=cmd_recall)
 
     sp = sub.add_parser("spend", help="token/cost ledger written by the gateway")

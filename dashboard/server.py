@@ -30,7 +30,11 @@ import pages  # noqa: E402
 
 def create_app() -> FastAPI:
     """App factory: include every pages/*.router, mount /static."""
-    app = FastAPI(title="pipa_harness dashboard", version="1.0.0")
+    # docs_url/redoc_url disabled: Swagger UI would otherwise claim GET
+    # /docs, which serves the Rules & Skills page. The OpenAPI schema
+    # itself stays available at /openapi.json.
+    app = FastAPI(title="pipa_harness dashboard", version="1.0.0",
+                  docs_url=None, redoc_url=None)
     for mod_info in sorted(pkgutil.iter_modules(pages.__path__), key=lambda m: m.name):
         if mod_info.name.startswith("_"):
             continue

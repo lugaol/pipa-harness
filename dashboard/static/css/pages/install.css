@@ -1,0 +1,87 @@
+/* Install wizard (/install): stepper + stage cards + job log drawer. */
+
+.inst-layout { display: grid; grid-template-columns: 230px minmax(0, 1fr); gap: var(--sp-5); align-items: start; }
+@media (max-width: 900px) { .inst-layout { grid-template-columns: 1fr; } }
+
+.inst-stepper { display: flex; flex-direction: column; gap: var(--sp-2); position: sticky; top: var(--sp-4); }
+.inst-step {
+  display: flex; align-items: center; gap: var(--sp-3); width: 100%; text-align: left;
+  background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: 10px 12px; cursor: pointer; color: var(--text-secondary); font-size: 13px;
+  transition: all var(--duration-normal) var(--ease-out);
+}
+.inst-step:hover { border-color: var(--border-strong); color: var(--text-primary); }
+.inst-step.active { border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(59,130,246,0.18); color: var(--text-primary); }
+.inst-step-num {
+  width: 22px; height: 22px; border-radius: 50%; flex-shrink: 0;
+  display: inline-flex; align-items: center; justify-content: center;
+  font-size: 11px; font-weight: 700; background: var(--bg-elevated); border: 1px solid var(--border-default);
+}
+.inst-step.done .inst-step-num { background: rgba(34,197,94,0.15); border-color: rgba(34,197,94,0.4); color: var(--accent-green); }
+.inst-step-label { flex: 1; min-width: 0; }
+.inst-step-state { font-size: 10px; text-transform: uppercase; letter-spacing: .5px; flex-shrink: 0; }
+.inst-step.done .inst-step-state { color: var(--accent-green); }
+.inst-step.pending .inst-step-state { color: var(--accent-yellow); }
+
+.inst-stage { display: none; flex-direction: column; gap: var(--sp-5); }
+.inst-stage.active { display: flex; }
+.inst-stage-title { font-size: 16px; font-weight: 700; margin: 0; }
+.inst-stage-desc { font-size: 12.5px; color: var(--text-secondary); margin: 2px 0 0; max-width: 70ch; line-height: 1.55; }
+
+.inst-card { background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-lg); padding: var(--sp-5); display: flex; flex-direction: column; gap: var(--sp-3); }
+.inst-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 320px), 1fr)); gap: var(--sp-4); }
+.inst-card-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); }
+.inst-card-head h4 { margin: 0; font-size: 14px; font-weight: 700; }
+
+.inst-badge {
+  display: inline-flex; align-items: center; gap: 5px; padding: 3px 9px; border-radius: 12px;
+  font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: .5px; white-space: nowrap;
+}
+.inst-badge.ok   { background: rgba(34,197,94,0.12); color: var(--accent-green); border: 1px solid rgba(34,197,94,0.25); }
+.inst-badge.miss { background: rgba(239,68,68,0.10); color: var(--accent-red, #ef4444); border: 1px solid rgba(239,68,68,0.28); }
+.inst-badge.warn { background: rgba(234,179,8,0.12); color: var(--accent-yellow); border: 1px solid rgba(234,179,8,0.3); }
+.inst-badge.idle { background: var(--bg-elevated); color: var(--text-muted); border: 1px solid var(--border-default); }
+
+.inst-field { display: flex; flex-direction: column; gap: 4px; }
+.inst-field label { font-size: 11px; color: var(--text-muted); font-weight: 600; text-transform: uppercase; letter-spacing: .02em; }
+.inst-field input {
+  background: var(--bg-base); color: var(--text-primary); border: 1px solid var(--border-default);
+  border-radius: var(--radius-sm); padding: 7px 10px; font-size: 12.5px; font-family: var(--font-mono); min-width: 0;
+}
+.inst-field input:focus { outline: none; border-color: var(--accent-primary); box-shadow: 0 0 0 2px rgba(59,130,246,0.2); }
+.inst-actions { display: flex; gap: var(--sp-2); flex-wrap: wrap; align-items: center; }
+.inst-test-result { font-family: var(--font-mono); font-size: 11.5px; white-space: pre-wrap; word-break: break-word; overflow-wrap: anywhere;
+  background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm); padding: var(--sp-3); max-height: 220px; overflow-y: auto; display: none; }
+
+.inst-check { display: flex; justify-content: space-between; align-items: center; gap: var(--sp-3); padding: 7px 0; border-bottom: 1px dashed var(--border-subtle); font-size: 12.5px; }
+.inst-check:last-child { border-bottom: none; }
+.inst-check .mono { font-size: 11.5px; color: var(--text-secondary); word-break: break-all; }
+
+details.inst-help { border: 1px dashed var(--border-default); border-radius: var(--radius-sm); padding: var(--sp-3) var(--sp-3); }
+details.inst-help summary { cursor: pointer; font-size: 12px; font-weight: 600; color: var(--accent-primary); user-select: none; }
+details.inst-help ol { margin: var(--sp-2) 0 0; padding-left: 20px; font-size: 12px; color: var(--text-secondary); line-height: 1.6; }
+details.inst-help a { color: var(--accent-primary); }
+.inst-cmdline {
+  display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2);
+  background: var(--bg-base); border: 1px solid var(--border-subtle); border-radius: var(--radius-sm);
+  padding: 7px 10px; margin-top: var(--sp-2);
+}
+.inst-cmdline code { font-family: var(--font-mono); font-size: 11.5px; word-break: break-all; overflow-wrap: anywhere; }
+
+/* job log drawer */
+.inst-log { display: none; flex-direction: column; gap: var(--sp-2);
+  border-top: 1px solid var(--border-subtle); margin-top: var(--sp-4); padding-top: var(--sp-4); }
+.inst-log.open { display: flex; }
+.inst-log-head { display: flex; align-items: center; justify-content: space-between; gap: var(--sp-2); flex-wrap: wrap; }
+.inst-log-title { font-size: 12px; font-weight: 700; }
+.inst-log-box {
+  background: #0b1220; color: #cbd5e1; font-family: var(--font-mono); font-size: 11.5px; line-height: 1.5;
+  border-radius: var(--radius-sm); padding: var(--sp-3); height: 260px; overflow-y: auto; white-space: pre-wrap; word-break: break-word;
+}
+.inst-log-box .ok   { color: #4ade80; }
+.inst-log-box .err  { color: #f87171; }
+
+.nav-badge {
+  margin-left: auto; background: var(--accent-yellow); color: #1f2937; font-size: 9px; font-weight: 800;
+  border-radius: 8px; padding: 1px 6px;
+}

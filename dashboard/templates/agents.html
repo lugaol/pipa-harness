@@ -1,38 +1,26 @@
 {% extends "base.html" %}
-{% block title %}Agents · pipa dashboard{% endblock %}
-{% block content %}
-<h1>Agents</h1>
-<p class="dim">Discovered from harness agents/ plus registered projects' extension
-agent dirs. Pick the tier each agent runs on — you choose what every tier
-means on the Models page.</p>
-
-{% if request.query_params.get('saved') == '1' %}<p class="badge ok">Agent tier saved.</p>{% endif %}
-
-{% if agents %}
-<div class="cards">
-  {% for a in agents %}
-  <div class="card agent-card">
-    <div class="stat-label">{{ a.name }} <span class="dim">· {{ a.source }}</span></div>
-    {% if a.description %}<p class="agent-desc">{{ a.description }}</p>{% endif %}
-    <div class="agent-model-line">
-      Runs on <strong>{{ a.effective_display }}</strong>
-      <span class="badge {{ 'cloud' if a.source == 'your pick' else 'dim-badge' }}">{{ a.source }}</span>
-    </div>
-    <form method="post" action="/api/agent-tier" class="agent-assign-form">
-      <input type="hidden" name="agent" value="{{ a.name }}">
-      <input type="hidden" name="next" value="/agents">
-      <select name="tier">
-        {% for opt in tier_options() %}
-        <option value="{{ opt.value }}"
-                {{ 'selected' if a.override_tier == opt.value else '' }}>{{ opt.label }}</option>
-        {% endfor %}
-      </select>
-      <button type="submit" class="btn btn-sm">Save</button>
-    </form>
-  </div>
-  {% endfor %}
-</div>
-{% else %}
-  {% with message='No agent definitions discovered.' %}{% include "empty_state.html" %}{% endwith %}
-{% endif %}
+{% block title %}Agents · pipa{% endblock %}
+{% block pagetitle %}Agents{% endblock %}
+{% block pagesubtitle %}assign a tier to each agent — the resolved model and step budget follow the tier. Reset returns an agent to its default.{% endblock %}
+{% block pagecss %}
+<link rel="stylesheet" href="/static/css/tables.css">
 {% endblock %}
+{% block content %}
+<section id="agents-page">
+  <section id="agents-section">
+    <div class="card-header">
+      <h3>Agent tiers</h3>
+      <span class="text-xs text-muted">override = your pick · drift marks overrides that differ from the default</span>
+    </div>
+    <div class="agents-table-wrapper">
+      <table class="agents-table">
+        <thead>
+          <tr><th>Agent</th><th>Description</th><th>Tier</th><th>Resolved model</th><th></th></tr>
+        </thead>
+        <tbody id="tier-agents-tbody"></tbody>
+      </table>
+    </div>
+  </section>
+</section>
+{% endblock %}
+{% block pagescript %}<script src="/static/js/pages/agents.js"></script>{% endblock %}

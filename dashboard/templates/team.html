@@ -1,0 +1,69 @@
+{% extends "base.html" %}
+{% block title %}Team · pipa{% endblock %}
+{% block pagetitle %}Team{% endblock %}
+{% block pagesubtitle %}Who uses the harness — adoption, session durations, and L1 triage alerts. Same rollup as <span class="mono">pipa usage-report</span>.{% endblock %}
+{% block content %}
+
+<section class="panel">
+  <h2>Adoption <span class="text-xs text-muted">· pipa v{{ version }}</span></h2>
+  <div class="cards">
+    {% for card in cards %}
+    {% with label=card.label, value=card.value, detail=card.detail %}{% include "stat_card.html" %}{% endwith %}
+    {% endfor %}
+  </div>
+</section>
+
+<section class="panel">
+  <h2>Alerts <span class="text-xs text-muted">· from <span class="mono">pipa triage</span></span></h2>
+  {% if alerts %}
+    {% for alert in alerts %}<div class="alert alert-warn">{{ alert }}</div>{% endfor %}
+  {% else %}
+  {% with message='All quiet — no triage signals need a human.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endif %}
+</section>
+
+{% if usage.per_day %}
+<section class="panel">
+  <h2>Sessions per day</h2>
+  <div class="table-wrap">
+  <table class="frag-table">
+    <thead><tr><th>day</th><th>sessions</th></tr></thead>
+    <tbody>
+      {% for day, n in usage.per_day %}<tr><td class="mono small">{{ day }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% for title, rows in [('Top tools', usage.top_tools), ('Top session models', usage.top_models), ('Runtimes', usage.runtimes)] %}
+{% if rows %}
+<section class="panel">
+  <h2>{{ title }}</h2>
+  <div class="table-wrap">
+  <table class="frag-table">
+    <thead><tr><th>name</th><th>count</th></tr></thead>
+    <tbody>
+      {% for name, n in rows %}<tr><td class="mono small">{{ name }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endfor %}
+
+{% if longest %}
+<section class="panel">
+  <h2>Longest sessions</h2>
+  <div class="table-wrap">
+  <table class="frag-table">
+    <thead><tr><th>session</th><th>duration</th><th>events</th><th>runtime</th></tr></thead>
+    <tbody>
+      {% for s in longest %}<tr><td class="mono small">{{ s.id }}</td><td class="mono small">{{ s.duration }}</td><td class="mono small">{{ s.events }}</td><td class="mono small">{{ s.runtime }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% endblock %}

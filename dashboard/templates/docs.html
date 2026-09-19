@@ -1,0 +1,32 @@
+{% extends "base.html" %}
+{% block title %}Rules &amp; Skills · pipa{% endblock %}
+{% block pagetitle %}Rules &amp; Skills{% endblock %}
+{% block pagesubtitle %}browse <code class="mono">rules/</code>, <code class="mono">skills/</code> and <code class="mono">agents/</code> — click a doc to read it, Edit to change and save in place{% endblock %}
+{% block pagecss %}
+<link rel="stylesheet" href="/static/css/pages/docs.css">
+{% endblock %}
+{% block content %}
+<section id="docs-page">
+  <section id="docs-section">
+    <div class="card-header">
+      <h3>Rules &amp; Skills</h3>
+    </div>
+    <div class="docs-layout">
+      <div class="docs-list" id="docs-list"></div>
+      <div class="docs-viewer">
+        <div class="docs-viewer-header">
+          <div>
+            <div class="docs-viewer-title" id="docs-viewer-title">Select a document</div>
+            <div class="docs-viewer-path mono text-xs text-muted" id="docs-viewer-path"></div>
+          </div>
+          <div class="docs-viewer-actions" id="docs-viewer-actions"></div>
+        </div>
+        <div class="docs-viewer-body" id="docs-viewer-body">
+          <div class="empty-state"><p>Pick a rule or skill from the list on the left.</p></div>
+        </div>
+      </div>
+    </div>
+  </section>
+</section>
+{% endblock %}
+{% block pagescript %}<script src="/static/js/pages/docs.js"></script>{% endblock %}

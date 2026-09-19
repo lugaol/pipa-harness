@@ -1,71 +1,109 @@
 {% extends "base.html" %}
-{% block title %}Overview · pipa dashboard{% endblock %}
+{% block title %}Status · pipa{% endblock %}
+{% block pagetitle %}Operations Dashboard{% endblock %}
+{% block pagesubtitle %}Check harness health, manage API keys — model and tier editing live on their own pages{% endblock %}
+{% block pagecss %}
+<link rel="stylesheet" href="/static/css/pages/status.css">
+{% endblock %}
 {% block content %}
-<h1>Overview</h1>
-
 {% if flash %}<div class="flash {{ 'error' if not flash_ok else '' }}">{{ flash }}</div>{% endif %}
 
-<div class="cards">
-  {% for c in cards %}
-    {% with label=c.label, value=c.value, detail=c.detail %}{% include "stat_card.html" %}{% endwith %}
-  {% endfor %}
-</div>
+<section id="overview-page">
+  <section id="status-section">
+    <div class="card-header">
+      <h3>Harness Status</h3>
+      <span class="text-xs text-muted"><span class="mono" id="last-check">Last check: —</span> · <a href="/install" class="row-link">Install wizard →</a></span>
+    </div>
+    <div class="status-grid" id="status-grid"></div>
+  </section>
 
-<section class="panel">
-  <h2>Services</h2>
-  <table>
-    <thead><tr><th>check</th><th>status</th><th>detail</th><th>action</th></tr></thead>
+  <section id="keys-section" class="panel" style="margin-top:var(--sp-6, 24px)">
+    <div class="card-header">
+      <h3>API Keys</h3>
+      <span class="text-xs text-muted">live view of <code class="mono">$PIPA_ROOT/.env</code> — saving restarts the gateway to apply the key · <a href="/providers" class="row-link">Manage providers →</a></span>
+    </div>
+    <div id="keys-grid"></div>
+  </section>
+</section>
+
+<section class="panel" style="margin-top:1.7rem">
+  <div class="card-header"><h3>Active project</h3>{% if project %}<a href="/observability?tab=sessions" class="row-link">View sessions →</a>{% endif %}</div>
+  {% if project %}
+  <div style="display:flex;align-items:center;gap:0.7rem;flex-wrap:wrap">
+    <strong style="font-size:1rem">{{ project.name }}</strong>
+    <span class="dim mono small">{{ project.path }}</span>
+    <span class="badge accent">{{ project.runtime }}</span>
+  </div>
+  {% else %}
+    {% with message='No active pipa project detected.' %}{% include "empty_state.html" %}{% endwith %}
+  {% endif %}
+</section>
+
+{% if projects is defined and projects %}
+<section class="panel" style="margin-top:1.7rem">
+  <div class="card-header">
+    <h3>Projects</h3>
+    <span class="dim small">{{ projects|length }} registered</span>
+  </div>
+  <div class="agents-table-wrapper">
+  <table class="agents-table">
+    <thead><tr><th>Project</th><th>Path</th><th>Rules</th><th>Skills</th><th>Memory</th><th>Runtime</th></tr></thead>
     <tbody>
-      {% for c in checks %}
+      {% for p in projects %}
       <tr>
-        <td>{{ c.name }}</td>
-        <td>{% if c.ok %}<span class="badge ok">up</span>{% else %}<span class="badge warn">down</span>{% endif %}</td>
-        <td class="mono dim">{{ c.detail }}</td>
-        <td class="nowrap">
-          {% if c.name == 'litellm gateway' %}
-          <form method="post" action="/api/services/gateway/restart" class="inline-form">
-            <button type="submit" {% if not c.ok %}title="gateway down — this will start it"{% endif %}>Restart</button>
+        <td style="font-weight:600">{{ p.path.rsplit('/',1)[-1] }}</td>
+        <td class="mono dim small path-cell">{{ p.path }}</td>
+        <td class="mono small">{{ p.rules }}</td>
+        <td class="mono small">{{ p.skills }}</td>
+        <td class="mono small">{{ p.memory }}</td>
+        <td>
+          <form method="post" action="/projects/runtime" class="inline-form">
+            <input type="hidden" name="project" value="{{ p.path }}">
+            <select name="runtime">
+              {% for r in runtimes %}
+              <option value="{{ r }}" {{ 'selected' if p.runtime == r else '' }}>{{ r }}</option>
+              {% endfor %}
+            </select>
+            <button type="submit" class="btn-sm">Apply</button>
           </form>
-          {% elif c.name == 'ollama' %}
-          <form method="post" action="/api/services/ollama/start" class="inline-form">
-            <button type="submit" {% if c.ok %}disabled title="already running"{% endif %}
-                    {% if not c.ok %}title="not running — this will start it"{% endif %}>Start</button>
-          </form>
-          {% else %}—{% endif %}
         </td>
       </tr>
-      {% else %}
-      <tr><td colspan="4">{% with message='Service checks unavailable.' %}{% include "empty_state.html" %}{% endwith %}</td></tr>
       {% endfor %}
     </tbody>
   </table>
-  <form method="post" action="/api/evals/run" class="inline-form actions">
-    <button type="submit">Run evals</button>
-  </form>
-</section>
-
-<section class="panel">
-  <h2>API keys</h2>
-  <p class="dim">Names only — values are never shown or logged.</p>
-  <div class="chip-row">
-    {% for k in env_keys %}
-      {% if k.present %}<span class="badge ok">{{ k.name }} SET</span>
-      {% else %}<span class="badge warn">{{ k.name }} UNSET</span>{% endif %}
-    {% endfor %}
   </div>
 </section>
+{% endif %}
 
-<section class="panel">
-  <h2>Active project</h2>
-  {% if project %}
-  <p>
-    <strong>{{ project.name }}</strong>
-    <span class="dim mono">({{ project.path }})</span>
-    · runtime <span class="badge">{{ project.runtime }}</span>
-    <a href="/sessions" class="row-link">view sessions →</a>
-  </p>
+<section class="panel" style="margin-top:1.7rem">
+  <div class="card-header"><h3>MCP integrations</h3></div>
+  <p class="dim small" style="margin-bottom:0.6rem">One folder per server in <span class="mono">mcp/</span> — enabled servers merge on next <span class="mono">pipa up</span>.</p>
+  {% if mcp_servers is defined and mcp_servers %}
+  <div class="agents-table-wrapper">
+  <table class="agents-table">
+    <thead><tr><th>Server</th><th>Type</th><th>Endpoint</th><th>State</th><th></th></tr></thead>
+    <tbody>
+      {% for s in mcp_servers %}
+      <tr>
+        <td class="mono" style="font-weight:600">{{ s.name }}</td>
+        <td class="dim small">{{ s.type }}</td>
+        <td class="mono dim small path-cell">{{ s.detail }}</td>
+        <td>{% if s.enabled %}<span class="drift-badge ok">enabled</span>{% else %}<span class="drift-badge">disabled</span>{% endif %}</td>
+        <td>
+          <form method="post" action="/api/mcp/toggle" class="inline-form">
+            <input type="hidden" name="server" value="{{ s.name }}">
+            <input type="hidden" name="enabled" value="{{ '0' if s.enabled else '1' }}">
+            <button type="submit" class="btn-sm {{ 'danger' if s.enabled else '' }}">{{ 'Disable' if s.enabled else 'Enable' }}</button>
+          </form>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+  </div>
   {% else %}
-    {% with message='No active pipa project detected from cwd.' %}{% include "empty_state.html" %}{% endwith %}
+    {% with message='No MCP servers registered.' %}{% include "empty_state.html" %}{% endwith %}
   {% endif %}
 </section>
 {% endblock %}
+{% block pagescript %}<script src="/static/js/pages/overview.js"></script>{% endblock %}

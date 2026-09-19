@@ -17,10 +17,19 @@ runtime configs at wire time (`pipa init` / `pipa up` / `pipa runtime set`).
 The registry also emits `<name>_*: allow` permission entries for each
 enabled server.
 
-## Planned integrations (scaffold your credentials via env, never in git)
+Copy `mcp/config.example.json` as the shape reference. Only `context7` ships
+enabled; add others by creating `mcp/<name>/config.json`.
 
-- `bitbucket/` — PRs, pipelines (env: BITBUCKET_TOKEN)
-- `jira/` — issues, sprints (env: JIRA_TOKEN)
-- `figma/` — design context (env: FIGMA_TOKEN)
+## Bridge script convention
 
-Copy `context7/config.json` as the shape reference.
+Bridges that do local work (memory, graph, build) live next to their
+config as `mcp/<name>/<bridge>.py` and follow one contract (see
+`mcp/_template/example_bridge.py`):
+
+- `--status` → one JSON line `{"ok": bool, "detail": str}`
+- `--self-test` → exit 0 on success, reason on stderr otherwise
+- one `--<tool>` flag per tool, JSON on stdout, soft failures (no
+  tracebacks, never print secrets)
+
+Folders starting with `_` (like `_template`) are never merged into
+runtime configs and never appear on the dashboard.

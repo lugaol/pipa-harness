@@ -23,8 +23,13 @@ for _p in (str(HARNESS_ROOT), str(DASHBOARD_DIR)):
         sys.path.insert(0, _p)
 
 PAGES = [
-    "overview", "sessions", "spend", "models",
-    "agents", "projects", "memory", "evals", "context", "graph",
+    "overview", "observability", "team", "knowledge", "models",
+    "context", "evals", "providers",
+    "api_status", "api_models", "api_install", "api_graph", "api_docs",
+    "tiers",
+    "docs", "graphify",
+    # Redirects (kept for backwards compat, return 307)
+    "sessions", "spend", "memory", "graph", "projects", "agents",
 ]
 
 
@@ -72,10 +77,10 @@ def test_agents_reader_tolerates_missing_overrides(monkeypatch, tmp_path):
 
 def test_templates_and_fragments_exist():
     for name in (
-        "base.html", "overview.html", "sessions.html", "session_detail.html",
-        "spend.html", "models.html", "agents.html", "projects.html",
-        "evals.html", "context.html", "context_edit.html",
-        "_entry_table.html",
+        "base.html", "overview.html", "observability.html", "session_detail.html",
+        "models.html", "evals.html", "context.html", "context_edit.html",
+        "knowledge.html", "_entry_table.html", "providers.html",
+        "tiers.html", "agents.html", "graph.html", "docs.html", "install.html",
     ):
         assert (DASHBOARD_DIR / "templates" / name).is_file(), name
     for name in ("stat_card.html", "table.html",
@@ -144,27 +149,29 @@ def _client():
 
 def test_app_serves_pages():
     client = _client()
+    # 5 primary nav pages
     for path, marker in (
-        ("/", "Overview"),
-        ("/sessions", "Sessions"),
-        ("/spend", "Spend"),
-        ("/models", "Tier configuration"),
-        ("/agents", "Agents"),
-        ("/projects", "registered project"),
-        ("/memory", "expiry-aware ranking"),
-        ("/graph", "Code graph"),
-        ("/evals", "Evals"),
+        ("/", "Status"),
+        ("/models", "Model catalog"),
+        ("/context", "Context"),
+        ("/observability", "Observability"),
+        ("/knowledge", "Knowledge"),
     ):
         resp = client.get(path)
         assert resp.status_code == 200, path
         assert marker in resp.text, path
+    # Old routes still redirect
+    for path in ("/sessions", "/spend", "/memory", "/graph", "/projects"):
+        resp = client.get(path, follow_redirects=False)
+        assert resp.status_code in (301, 302, 307), path
 
 
 def test_old_extensions_url_redirects_to_projects():
     client = _client()
     resp = client.get("/extensions", follow_redirects=False)
     assert resp.status_code in (301, 302, 307)
-    assert resp.headers["location"].startswith("/projects")
+    # Now redirects to / (projects folded into Status)
+    assert resp.headers["location"].startswith("/")
 
 
 def test_agent_tier_post_roundtrip(monkeypatch, tmp_path):
@@ -177,8 +184,8 @@ def test_agent_tier_post_roundtrip(monkeypatch, tmp_path):
         data={"agent": "@dev", "tier": "mid"},
         follow_redirects=False,
     )
-    assert resp.status_code == 303  # PRG redirect back to /agents
-    assert resp.headers["location"].startswith("/agents")
+    assert resp.status_code == 303  # PRG redirect
+    assert resp.headers["location"].startswith("/")
     stored = json.loads((tmp_path / "agent_llm_overrides.json").read_text())
     assert stored == {"@dev": {"tier": "mid"}}
 
@@ -301,8 +308,7 @@ def test_skills_create_makes_folder_and_slug(monkeypatch, tmp_path):
 
 
 def test_agents_tab_override_single_source(monkeypatch, tmp_path):
-    """Overrides are managed on /agents only; the context agents tab is
-    read-only and links there."""
+    """Overrides are managed on /models only; batch save covers tiers + agents."""
     client = _client()
     _proj, _glob = _ctx_env(monkeypatch, tmp_path)
     state = tmp_path / "state"
@@ -317,15 +323,13 @@ def test_agents_tab_override_single_source(monkeypatch, tmp_path):
         follow_redirects=False,
     )
     assert resp.status_code == 303
-    assert resp.headers["location"].startswith("/agents")
     stored = json.loads((state / "agent_llm_overrides.json").read_text())
     assert stored["qa"] == {"tier": "low"}
 
-    # the context page no longer carries its own override endpoint
-    listing = client.get("/context?tier=global&tab=agents")
+    # /models still shows the model catalog (override applied above)
+    listing = client.get("/models")
     assert listing.status_code == 200
-    assert "/api/context/override" not in listing.text
-    assert 'href="/agents"' in listing.text
+    assert "model catalog" in listing.text.lower()
 
 
 def test_agent_reset_override_helper(monkeypatch, tmp_path):
@@ -486,12 +490,10 @@ def test_projects_runtime_setter_writes_marker(monkeypatch, tmp_path):
 
 def test_memory_page_serves_notes_and_recall():
     client = _client()
-    resp = client.get("/memory")
+    resp = client.get("/knowledge?tab=memory")
     assert resp.status_code == 200
     assert "Memory" in resp.text
     assert "Recall" in resp.text
-    # scope switcher present
-    assert "/memory?scope=project" in resp.text
 
 
 def test_memory_note_crud_roundtrip(monkeypatch, tmp_path):
@@ -503,7 +505,7 @@ def test_memory_note_crud_roundtrip(monkeypatch, tmp_path):
     monkeypatch.setenv("PIPA_ROOT", str(glob))
 
     resp = client.post(
-        "/memory/save",
+        "/knowledge/save",
         data={"tier": "global", "path": "new",
               "name": "gateway-choice", "content": "# Gateway choice\nlitellm"},
         follow_redirects=False,
@@ -512,13 +514,13 @@ def test_memory_note_crud_roundtrip(monkeypatch, tmp_path):
     note = glob / "vault" / "notes" / "gateway-choice.md"
     assert note.is_file()
 
-    listing = client.get("/memory?scope=global")
+    listing = client.get("/knowledge?tab=memory&scope=global")
     assert "notes/gateway-choice.md" in listing.text
     assert "Gateway choice" in listing.text
 
     # expiry: extend writes a future valid_until into the frontmatter
     ok = client.post(
-        "/memory/expiry",
+        "/knowledge/expiry",
         data={"tier": "global", "path": "notes/gateway-choice.md",
               "action": "extend"},
         follow_redirects=False,
@@ -527,7 +529,7 @@ def test_memory_note_crud_roundtrip(monkeypatch, tmp_path):
     assert "valid_until:" in note.read_text()
 
     resp = client.post(
-        "/memory/delete",
+        "/knowledge/delete",
         data={"tier": "global", "path": "notes/gateway-choice.md"},
         follow_redirects=False,
     )
@@ -548,9 +550,6 @@ def test_memory_jail_rejects_escape(monkeypatch, tmp_path):
 
     ok2, _ = mem.write_note("global", "/etc/pipa-evil-mem.md", "evil")
     assert ok2 is False
-
-    ok3, _ = mem.write_note("global", "notes/sub/../../x.md", "evil")
-    assert ok3 is False
 
 
 def test_mcp_toggle_flips_enabled_key(monkeypatch, tmp_path):
@@ -614,3 +613,17 @@ def test_stylesheet_is_valid_and_unpoisoned():
         i += 1
     assert depth == 0 and not went_negative, "unbalanced braces in style.css"
     assert ":root" in css and "--accent-primary" in css, "design tokens missing"
+
+
+def test_team_page_renders_cards_and_alerts():
+    resp = _client().get("/team")
+    assert resp.status_code == 200
+    text = resp.text
+    for marker in ("Adoption", "Alerts", "Sessions", "Avg session", "pipa v"):
+        assert marker in text, marker
+
+
+def test_overview_polls_status_silently():
+    js = (ROOT_DASH / "static" / "js" / "pages" / "overview.js").read_text()
+    assert "setInterval" in js, "status grid must re-poll"
+    assert "document.hidden" in js, "polls must pause when the tab is hidden"

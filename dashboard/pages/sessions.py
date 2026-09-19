@@ -1,12 +1,12 @@
-"""Sessions pages: summary table + single-session replay timeline."""
+"""Redirect: /sessions -> /observability?tab=sessions (backwards compat)."""
 from __future__ import annotations
 
-from datetime import datetime
-
 from fastapi import APIRouter, Request
+from fastapi.responses import RedirectResponse
 
 from data import sessions as session_data
 from . import render
+from datetime import datetime
 
 router = APIRouter()
 
@@ -27,15 +27,12 @@ def _clip(value, n=70):
 
 
 def _replay_rows(events):
-    """Port of pipa.cli._replay_lines, rendered as template rows."""
     t0 = _parse_ts(events[0].get("ts")) if events else 0.0
     rows = []
     for e in events:
         off = max(_parse_ts(e.get("ts")) - t0, 0.0)
         detail_parts = [str(e[k]) for k in _DETAIL_KEYS if e.get(k)]
-        meta = ", ".join(
-            f"{k}={e[k]}" for k in _META_KEYS if e.get(k) is not None
-        )
+        meta = ", ".join(f"{k}={e[k]}" for k in _META_KEYS if e.get(k) is not None)
         if meta:
             detail_parts.append(meta)
         rows.append({
@@ -46,40 +43,9 @@ def _replay_rows(events):
     return rows
 
 
-def _fmt_counts(counts: dict, limit: int = 3) -> str:
-    ranked = sorted((counts or {}).items(), key=lambda kv: (-kv[1], kv[0]))
-    return ", ".join(f"{k}×{v}" for k, v in ranked[:limit])
-
-
-def _summary_row(s: dict) -> dict:
-    sid = str(s.get("id") or "")
-    return {
-        "id": sid,
-        "href": f"/sessions/{sid}",
-        "runtime": s.get("runtime") or "?",
-        "start": str(s.get("start") or "")[:19],
-        "end": str(s.get("end") or "")[:19],
-        "events": s.get("events", 0),
-        "tools": _fmt_counts(s.get("tools")),
-        "models": _fmt_counts(s.get("models")),
-    }
-
-
 @router.get("/sessions")
 def sessions_list(request: Request):
-    try:
-        summaries = session_data.all_sessions()
-    except Exception:
-        summaries = []
-    newest_first = [_summary_row(s) for s in reversed(summaries)]
-    columns = ["id", "runtime", "start", "end", "events", "tools", "models"]
-    return render(
-        request,
-        "sessions.html",
-        columns=columns,
-        rows=newest_first,
-        count=len(newest_first),
-    )
+    return RedirectResponse(url="/observability?tab=sessions", status_code=307)
 
 
 @router.get("/sessions/{sid}")
@@ -92,19 +58,14 @@ def session_detail(request: Request, sid: str):
     duration = 0.0
     if summary and summary.get("end"):
         duration = max(
-            _parse_ts(summary["end"]) - _parse_ts(summary.get("start")), 0.0
-        )
+            _parse_ts(summary["end"]) - _parse_ts(summary.get("start")), 0.0)
     return render(
-        request,
-        "session_detail.html",
-        sid=sid,
-        found=bool(events),
+        request, "session_detail.html",
+        sid=sid, found=bool(events),
         header={
             "runtime": summary.get("runtime") or "?" if summary else "?",
-            "events": len(events),
-            "duration": f"{duration:.0f}s",
-            "tools": tools,
-            "models": models,
+            "events": len(events), "duration": f"{duration:.0f}s",
+            "tools": tools, "models": models,
         },
         rows=_replay_rows(events),
     )

@@ -274,5 +274,23 @@ def test_dashboard_models_page_renders_discovered_catalog(registry_env):
     resp = client.get("/models")
     assert resp.status_code == 200
     text = resp.text
-    assert "Tier configuration" in text
+    assert "Model catalog" in text
     assert "Ollama - Qwen2.5 Coder 14B" in text, "pretty names must appear"
+
+
+def test_apply_tiers_batch_ok_and_warnings(registry_env):
+    ok, msg, warnings = mr.apply_tiers({"low": "qwen2.5-coder:14b", "mid": "qwen2.5-coder:14b"})
+    assert ok and msg == "saved"
+    assert mr.tier_assignments() == {"low": "qwen2.5-coder:14b", "mid": "qwen2.5-coder:14b"}
+    assert isinstance(warnings, list)
+
+
+def test_apply_tiers_rejects_unknown_tier_and_model(registry_env):
+    ok, msg, _ = mr.apply_tiers({"ultra": "qwen2.5-coder:14b"})
+    assert not ok and "unknown tier" in msg
+    ok, msg, _ = mr.apply_tiers({"low": "no-such-model"})
+    assert not ok and "unknown model" in msg
+    ok, msg, _ = mr.apply_tiers({})
+    assert not ok and "non-empty" in msg
+    ok, msg, _ = mr.apply_tiers({"low": ""})
+    assert not ok and "needs a model" in msg

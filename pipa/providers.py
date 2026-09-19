@@ -2,15 +2,10 @@
 
 There is NO static model list anywhere in the harness. Each provider
 exposes an OpenAI-style listing endpoint; this module queries it,
-normalizes the result and caches it in state/model_catalog.json. The
-gateway composer, the model registry and the dashboard all read that
-cache — never hardcoded ids — because providers (especially their free
-tiers) change constantly.
+normalizes the result and caches it in state/model_catalog.json.
 
-Only the *provider wiring* (endpoint, env key, litellm template) is code;
-the models themselves always come from the wire. FREE-TIER ONLY by policy:
-every provider's `keep` filter drops paid models so the catalog never
-lists anything that costs money.
+Provider wiring lives in models/providers.yaml — adding a provider means
+adding an entry there, no Python change needed.
 """
 from __future__ import annotations
 
@@ -18,6 +13,7 @@ import json
 import os
 import time
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Callable, Dict, List, Optional
 from urllib.request import Request, urlopen
 
@@ -26,99 +22,114 @@ from pipa import config
 CATALOG_FILE = "model_catalog.json"
 TIMEOUT_SECS = 8
 
+# ── keep filters (free-tier only) ──────────────────────────────────────────
 
-def _free_only(model_id: str) -> bool:
-    return model_id.endswith(":free")
-
-
-def _zen_free_only(model_id: str) -> bool:
-    return model_id.endswith("-free")
-
-
-def _kilo_free_only(model_id: str) -> bool:
-    return model_id.endswith(":free") or model_id == "kilo-auto/free"
-
-
-def _ollama_local_only(model_id: str) -> bool:
-    # ":cloud" models run on Ollama's servers and can cost money — local
-    # installs are the free tier.
-    return not model_id.endswith(":cloud")
+_KEEP_FILTERS: Dict[str, Callable[[str], bool]] = {
+    "free": lambda mid: mid.endswith(":free"),
+    "zen_free": lambda mid: mid.endswith("-free"),
+    "kilo_free": lambda mid: mid.endswith(":free") or mid == "kilo-auto/free",
+    "local_only": lambda mid: not mid.endswith(":cloud"),
+}
 
 
 @dataclass(frozen=True)
 class Provider:
-    """Static wiring for one provider; its model list is always dynamic."""
-
     slug: str
     label: str
     kind: str  # "local" | "cloud"
-    requires: tuple[str, ...]  # env keys needed to CALL models (not to list)
+    requires: tuple[str, ...]
     list_url: str
     litellm_params: Callable[[str], dict]
     keep: Callable[[str], bool] = lambda mid: True
     needs_key_for_list: bool = True
 
 
-PROVIDERS: Dict[str, Provider] = {
-    p.slug: p
-    for p in [
-        Provider(
-            slug="ollama",
-            label="Ollama",
-            kind="local",
-            requires=(),
+def _load_providers() -> Dict[str, Provider]:
+    """Load provider wiring from models/providers.yaml with fallback to built-in."""
+    yaml_path = config.models_dir() / "providers.yaml"
+    if yaml_path.exists():
+        try:
+            import yaml
+
+            raw = yaml.safe_load(yaml_path.read_text()) or {}
+            entries = raw.get("providers") or []
+            out: Dict[str, Provider] = {}
+            for entry in entries:
+                slug = str(entry.get("slug") or "").strip()
+                if not slug:
+                    continue
+                keep_name = str(entry.get("keep") or "").strip()
+                keep_fn = _KEEP_FILTERS.get(keep_name, lambda mid: True)
+                litellm_tpl = dict(entry.get("litellm") or {})
+
+                def _make_params(tpl, _slug=slug):
+                    def _params(mid: str) -> dict:
+                        d: dict = {}
+                        for k, v in tpl.items():
+                            d[k] = v.replace("{id}", mid) if isinstance(v, str) else v
+                        return d
+
+                    return _params
+
+                out[slug] = Provider(
+                    slug=slug,
+                    label=str(entry.get("label") or slug),
+                    kind=str(entry.get("kind") or "cloud"),
+                    requires=tuple(entry.get("requires") or []),
+                    list_url=str(entry.get("list_url") or ""),
+                    keep=keep_fn,
+                    needs_key_for_list=bool(entry.get("needs_key_for_list", True)),
+                    litellm_params=_make_params(litellm_tpl),
+                )
+            if out:
+                return out
+        except Exception:
+            pass
+    # Fallback — should not normally be reached
+    return {
+        "ollama": Provider(
+            slug="ollama", label="Ollama", kind="local", requires=(),
             list_url="http://localhost:11434/v1/models",
-            needs_key_for_list=False,
-            keep=_ollama_local_only,
+            needs_key_for_list=False, keep=_KEEP_FILTERS["local_only"],
             litellm_params=lambda mid: {
-                "model": f"openai/{mid}",
-                "api_base": "http://localhost:11434/v1",
-                "api_key": "ollama",
-                "custom_llm_provider": "openai",
+                "model": f"openai/{mid}", "api_base": "http://localhost:11434/v1",
+                "api_key": "ollama", "custom_llm_provider": "openai",
             },
         ),
-        Provider(
-            slug="opencode-zen",
-            label="OpenCode Zen Free",
-            kind="cloud",
+        "opencode-zen": Provider(
+            slug="opencode-zen", label="OpenCode Zen Free", kind="cloud",
             requires=("OPENCODE_ZEN_API_KEY",),
             list_url="https://opencode.ai/zen/v1/models",
-            keep=_zen_free_only,
+            keep=_KEEP_FILTERS["zen_free"],
             litellm_params=lambda mid: {
-                "model": f"openai/{mid}",
-                "api_base": "https://opencode.ai/zen/v1",
+                "model": f"openai/{mid}", "api_base": "https://opencode.ai/zen/v1",
                 "api_key": "os.environ/OPENCODE_ZEN_API_KEY",
             },
         ),
-        Provider(
-            slug="openrouter",
-            label="OpenRouter Free",
-            kind="cloud",
+        "openrouter": Provider(
+            slug="openrouter", label="OpenRouter Free", kind="cloud",
             requires=("OPENROUTER_API_KEY",),
             list_url="https://openrouter.ai/api/v1/models",
-            needs_key_for_list=False,  # listing is public; calls need the key
-            keep=_free_only,
+            needs_key_for_list=False, keep=_KEEP_FILTERS["free"],
             litellm_params=lambda mid: {
-                "model": f"openrouter/{mid}",
-                "api_key": "os.environ/OPENROUTER_API_KEY",
+                "model": f"openrouter/{mid}", "api_key": "os.environ/OPENROUTER_API_KEY",
             },
         ),
-        Provider(
-            slug="kilo",
-            label="Kilo Free",
-            kind="cloud",
+        "kilo": Provider(
+            slug="kilo", label="Kilo Free", kind="cloud",
             requires=("KILO_API_KEY",),
             list_url="https://api.kilo.ai/api/gateway/v1/models",
-            keep=_kilo_free_only,
+            keep=_KEEP_FILTERS["kilo_free"],
             litellm_params=lambda mid: {
-                "model": mid,
-                "custom_llm_provider": "openai",
+                "model": mid, "custom_llm_provider": "openai",
                 "api_base": "https://api.kilo.ai/api/gateway",
                 "api_key": "os.environ/KILO_API_KEY",
             },
         ),
-    ]
-}
+    }
+
+
+PROVIDERS: Dict[str, Provider] = _load_providers()
 
 
 def cache_path():

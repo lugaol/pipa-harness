@@ -185,3 +185,69 @@ def test_canonical_pipa_memory_dir_is_searched(env):
         r["source"] == "vault" and r["path"] and ".pipa/memory" in r["path"]
         for r in out["results"]
     )
+
+
+def test_recall_digest_bounded_and_capped(env, monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    from pipa.commands.recall import cmd_recall
+    from pipa import recall as recall_mod
+
+    _, project = env
+    monkeypatch.setattr(recall_mod.config, "find_project", lambda *a, **k: project)
+    monkeypatch.setenv("MEMORY_CONTEXT_MAX_CHARS", "200")
+    rc = cmd_recall(SimpleNamespace(query="blow detection", limit=8, digest=True))
+    assert rc == 0
+    out = capsys.readouterr().out
+    assert out.startswith("memory digest for:")
+    assert len(out) <= 300  # cap + truncation note
+
+
+def test_recall_digest_empty_and_disabled(env, monkeypatch, capsys):
+    from types import SimpleNamespace
+
+    from pipa.commands.recall import cmd_recall
+    from pipa import recall as recall_mod
+
+    _, project = env
+    monkeypatch.setattr(recall_mod.config, "find_project", lambda *a, **k: project)
+    monkeypatch.setattr(recall_mod, "recall",
+                        lambda *a, **k: {"results": [], "sources_queried": []})
+    assert cmd_recall(SimpleNamespace(query="zzz", limit=8, digest=True)) == 0
+    assert "(memory context unavailable)" in capsys.readouterr().out
+    monkeypatch.setenv("MEMORY_CONTEXT_DISABLED", "1")
+    assert cmd_recall(SimpleNamespace(query="zzz", limit=8, digest=True)) == 0
+    assert capsys.readouterr().out == ""
+
+
+def test_stale_report_flags_expired_and_over_budget(env, tmp_path):
+    harness, project = env
+    over = harness / "vault" / "over.md"
+    over.write_text("# Big\n" + "line\n" * 150)
+    report = recall_mod.stale_report()
+    by_path = {e["path"]: e for e in report}
+    assert str(over) in by_path
+    assert any("over budget" in r for r in by_path[str(over)]["reasons"])
+    assert str(harness / "vault" / "harness-note.md") not in by_path
+
+
+def test_stale_report_flags_untouched(env, tmp_path):
+    import os
+    import time
+
+    harness, _project = env
+    old = harness / "vault" / "old.md"
+    old.write_text("# Old\nbody\n")
+    ancient = time.time() - 200 * 86400
+    os.utime(old, (ancient, ancient))
+    report = recall_mod.stale_report(touch_days=180)
+    by_path = {e["path"]: e for e in report}
+    assert any("untouched" in r for r in by_path[str(old)]["reasons"])
+
+
+def test_stale_report_clean_vault_empty(tmp_path, monkeypatch):
+    harness = tmp_path / "harness"
+    (harness / "vault").mkdir(parents=True)
+    (harness / "vault" / "fresh.md").write_text("# Fresh\nshort\n")
+    monkeypatch.setattr(recall_mod.config, "harness_root", lambda: harness)
+    assert recall_mod.stale_report() == []

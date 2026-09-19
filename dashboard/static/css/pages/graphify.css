@@ -1,0 +1,9 @@
+/* Graph viewer embed + mode toggle (/graphify page). Extracted verbatim from
+   the former inline <style> block of static/index.html. */
+.graph-frame {
+  width: 100%; height: 78vh; border: 1px solid var(--border-default); border-radius: var(--radius-sm);
+  background: var(--bg-base); margin-top: var(--sp-3);
+}
+.btn-group { display: inline-flex; border: 1px solid var(--border-default); border-radius: var(--radius-md); overflow: hidden; background: var(--bg-elevated); }
+.btn-group .btn { border: none; border-radius: 0; height: 28px; }
+.btn-group .btn.active { background: var(--accent-primary); color: #fff; }

@@ -1,0 +1,30 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "QA verdict",
+  "description": "Structured @qa verdict — binary PASS/FAIL, machine-checkable. Replaces free-text verdicts. Ported from ia_harness (emulator field dropped as AOSP-specific).",
+  "type": "object",
+  "properties": {
+    "status": {"type": "string", "enum": ["PASS", "FAIL"]},
+    "story": {"type": "string", "description": "Story file or acceptance source"},
+    "criteria": {
+      "type": "array",
+      "minItems": 1,
+      "items": {
+        "type": "object",
+        "properties": {
+          "criterion": {"type": "string"},
+          "result": {"type": "string", "enum": ["pass", "fail"]},
+          "evidence": {"type": "string", "description": "Command output or file:line"},
+          "file": {"type": "string"}
+        },
+        "required": ["criterion", "result", "evidence"],
+        "additionalProperties": false
+      }
+    },
+    "build": {"type": "string", "description": "Full build/test command + result"},
+    "route_tier": {"type": "string"},
+    "model_id": {"type": "string"}
+  },
+  "required": ["status", "criteria", "build"],
+  "additionalProperties": false
+}

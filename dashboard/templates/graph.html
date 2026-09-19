@@ -1,73 +1,30 @@
 {% extends "base.html" %}
-{% block title %}Graph · pipa dashboard{% endblock %}
+{% block title %}Graph · pipa{% endblock %}
+{% block pagetitle %}Graph{% endblock %}
+{% block pagesubtitle %}query the code graph before grep — search symbols, inspect the index, rebuild when the tree changes{% endblock %}
+{% block pagecss %}
+<link rel="stylesheet" href="/static/css/pages/graphify.css">
+{% endblock %}
 {% block content %}
-<h1>Code graph</h1>
-<p class="dim">
-  The graphify knowledge plane — agents query it BEFORE grep.
-  Artifact: <span class="mono">graphify-out/graph.json</span>.
-</p>
+<section id="graph-page">
+  <section id="graph-status-section">
+    <div class="card-header">
+      <h3>Index status</h3>
+      <button class="btn btn-secondary btn-sm" id="graph-refresh-btn" onclick="refreshGraph()">Rebuild graph</button>
+    </div>
+    <div class="status-grid" id="graph-stats"></div>
+  </section>
 
-<div class="cards">
-  <div class="card stat-card">
-    <div class="stat-label">Graph status</div>
-    <div class="stat-value">{% if status.has_graph %}<span class="badge ok">indexed</span>{% else %}<span class="badge warn">missing</span>{% endif %}</div>
-    <p class="dim mono path-cell">{{ status.graph_path or 'no graph.json for this root' }}</p>
-  </div>
-  <div class="card stat-card">
-    <div class="stat-label">Nodes</div>
-    <div class="stat-value">{{ status.nodes }}</div>
-    <p class="dim">{{ status.root }}</p>
-  </div>
-  <div class="card stat-card">
-    <div class="stat-label">graphify CLI</div>
-    <div class="stat-value">{% if status.cli %}<span class="badge ok">installed</span>{% else %}<span class="badge warn">not found</span>{% endif %}</div>
-    <p class="dim mono path-cell">{{ status.cli or 'pipa install graphify' }}</p>
-  </div>
-</div>
-
-{% if not status.has_graph %}
-<div class="flash">
-  No knowledge graph yet. Generate one, then re-open this page:<br>
-  <span class="mono">cd {{ status.root }} &amp;&amp; graphify index .</span>
-</div>
-{% endif %}
-
-<section class="panel">
-  <h2>Query</h2>
-  <form method="get" action="/graph" class="filter-bar">
-    <input type="text" name="q" value="{{ q }}" placeholder='try: "where is X handled?"'>
-    {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}
-    <button type="submit"
-            {% if not status.has_graph and not status.cli %}disabled title="no graph.json and no graphify CLI"{% endif %}>
-      Query
-    </button>
-  </form>
-
-  {% if result %}
-    {% if result.cli_out %}
-    <h3 class="dim">graphify output</h3>
-    <pre class="editor mono">{{ result.cli_out }}</pre>
-    {% endif %}
-    {% if result.cli_err %}<div class="flash error">{{ result.cli_err }}</div>{% endif %}
-
-    {% if result.hits %}
-    <h3 class="dim">node hits (scored fallback)</h3>
-    <table>
-      <thead><tr><th>node</th><th>type</th><th>path</th><th>score</th></tr></thead>
-      <tbody>
-        {% for h in result.hits %}
-        <tr>
-          <td class="mono">{{ h.title }}</td>
-          <td>{{ h.detail or '—' }}</td>
-          <td class="mono dim path-cell">{{ h.path or '—' }}</td>
-          <td class="dim nowrap">{{ '%.1f'.format(h.score) }}</td>
-        </tr>
-        {% endfor %}
-      </tbody>
-    </table>
-    {% elif not result.cli_out and not result.cli_err %}
-      {% with message='No graph hits for this query.' %}{% include "empty_state.html" %}{% endwith %}
-    {% endif %}
-  {% endif %}
+  <section id="graph-search-section" style="margin-top:var(--sp-6, 24px)">
+    <div class="card-header">
+      <h3>Search</h3>
+    </div>
+    <div class="env-input-wrap" style="margin-bottom:12px">
+      <input id="graph-q" type="text" placeholder="class, method or symbol…" style="flex:1">
+      <button class="btn btn-primary btn-sm" onclick="runGraphSearch()">Search</button>
+    </div>
+    <div id="graph-results"></div>
+  </section>
 </section>
 {% endblock %}
+{% block pagescript %}<script src="/static/js/pages/graph.js"></script>{% endblock %}

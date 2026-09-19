@@ -1,0 +1,23 @@
+/* Harness status cards (overview page). Extracted verbatim from the former
+   inline <style> block of static/index.html. */
+.status-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr)); gap: var(--sp-4); }
+.status-card {
+  background: var(--bg-card); border: 1px solid var(--border-subtle); border-radius: var(--radius-md);
+  padding: var(--sp-5); display: flex; align-items: center; gap: var(--sp-3);
+  transition: all var(--duration-normal) var(--ease-out); min-height: 72px; min-width: 0; overflow: hidden;
+}
+.status-card:hover { border-color: var(--border-default); transform: translateY(-1px); box-shadow: var(--shadow-md); }
+.status-card-icon { width: 32px; height: 32px; border-radius: var(--radius-sm); display: flex; align-items: center; justify-content: center; flex-shrink: 0; }
+.status-card-icon svg { width: 16px; height: 16px; }
+.status-card-icon.green { background: rgba(34,197,94,0.12); color: var(--accent-green); }
+.status-card-icon.red   { background: rgba(239,68,68,0.12); color: var(--accent-red); }
+.status-card-body { flex: 1; min-width: 0; }
+.status-card-name { font-size: 13px; font-weight: 600; line-height: 1.3; text-transform: capitalize; }
+.status-card-detail { font-size: 11px; color: var(--text-muted); margin-top: 1px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.status-card-dot { width: 8px; height: 8px; border-radius: 50%; flex-shrink: 0; }
+.status-card-dot.ok   { background: var(--accent-green); box-shadow: 0 0 8px rgba(34,197,94,0.5); }
+.status-card-dot.fail { background: var(--accent-red); box-shadow: 0 0 8px rgba(239,68,68,0.5); }
+
+@media (max-width: 640px) {
+  .status-grid { grid-template-columns: 1fr; }
+}

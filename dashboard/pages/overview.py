@@ -1,4 +1,4 @@
-"""Overview page: stat cards, service checks + control actions, env keys."""
+"""Status page: stat cards, service checks, env keys, projects, MCP."""
 from __future__ import annotations
 
 from datetime import date
@@ -7,9 +7,13 @@ from urllib.parse import quote
 from fastapi import APIRouter, Request
 from fastapi.responses import RedirectResponse
 
-from data import gateway, models as models_data, services as services_data
+from pipa.runtime import RUNTIMES
+
+from data import gateway, mcp as mcp_data, models as models_data
+from data import projects as projects_data
+from data import services as services_data
 from data import sessions as session_data, spend as spend_data, system
-from . import render
+from . import form_fields, render
 
 router = APIRouter()
 
@@ -29,7 +33,6 @@ def health():
 
 @router.get("/")
 def overview(request: Request, flash: str = "", ok: str = ""):
-    # data-layer readers are fail-soft; no extra guards needed here
     models = gateway.list_models()
 
     sessions_all = session_data.all_sessions()
@@ -73,6 +76,16 @@ def overview(request: Request, flash: str = "", ok: str = ""):
         },
     ]
 
+    # Projects + MCP for the folded sections
+    try:
+        projects = projects_data.list_projects()
+    except Exception:
+        projects = []
+    try:
+        mcp_servers = mcp_data.list_servers()
+    except Exception:
+        mcp_servers = []
+
     return render(
         request,
         "overview.html",
@@ -82,6 +95,9 @@ def overview(request: Request, flash: str = "", ok: str = ""):
         env_keys=env_keys,
         gateway_up=_check_ok("litellm gateway"),
         ollama_up=_check_ok("ollama"),
+        projects=projects,
+        runtimes=list(RUNTIMES),
+        mcp_servers=mcp_servers,
         flash=flash,
         flash_ok=ok != "0",
     )
@@ -101,3 +117,30 @@ def start_ollama(request: Request):
     return RedirectResponse(
         f"/?flash={quote(msg[:300])}&ok={'1' if ok else '0'}", status_code=303
     )
+
+
+@router.post("/projects/runtime")
+async def set_project_runtime(request: Request):
+    fields = await form_fields(request)
+    project = str(fields.get("project", ""))
+    runtime = str(fields.get("runtime", ""))
+    try:
+        projects_data.set_runtime(project, runtime)
+        ok, msg = True, f"runtime set to {runtime}"
+    except Exception as exc:
+        ok, msg = False, str(exc)[:300]
+    return RedirectResponse(
+        f"/?flash={quote(msg)}&ok={'1' if ok else '0'}", status_code=303
+    )
+
+
+@router.post("/api/mcp/toggle")
+async def mcp_toggle(request: Request):
+    fields = await form_fields(request)
+    ok, msg = mcp_data.set_enabled(
+        str(fields.get("server", "")), str(fields.get("enabled", "")) == "1"
+    )
+    extra = "&saved=1" if ok else "&error=" + quote(msg)
+    # Redirect back to status (MCP now lives there)
+    return RedirectResponse(f"/?flash={quote(msg[:300])}&ok={'1' if ok else '0'}",
+                            status_code=303)

@@ -43,12 +43,12 @@ def checks() -> List[dict]:
         {
             "name": "litellm binary",
             "ok": bool(litellm_bin),
-            "detail": litellm_bin or "not on PATH",
+            "detail": "installed" if litellm_bin else "not on PATH",
         },
         {
             "name": "graphify",
             "ok": bool(graphify_bin),
-            "detail": graphify_bin or "not on PATH",
+            "detail": "installed" if graphify_bin else "not on PATH",
         },
     ]
 

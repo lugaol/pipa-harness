@@ -1,4 +1,4 @@
-"""Evals page: run tools/evals/run.py and render its JSON report."""
+"""Evals — kept as a standalone page, reachable from Status. No nav entry."""
 from __future__ import annotations
 
 import json
@@ -73,11 +73,9 @@ def evals_view(request: Request):
 
 @router.post("/api/evals/run")
 def evals_run(request: Request):
-    # sync def → FastAPI offloads the 60s subprocess to the threadpool,
-    # keeping the event loop (and /api/health) responsive
     global _LAST
     try:
         _LAST = run_evals()
-    except Exception as exc:  # defensive: page must never 500
+    except Exception as exc:
         _LAST = _failure(str(exc))
     return render(request, "evals.html", result=_LAST)

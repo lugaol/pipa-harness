@@ -357,3 +357,55 @@ def recall(query: str, project: Path | None = None, limit: int = 8) -> dict:
     hits.sort(key=lambda h: (h["expired"], -h["score"]))
     out["results"] = hits[: max(0, limit)]
     return out
+
+
+STALE_TOUCH_DAYS = 180
+STALE_BUDGETS = (("vault", 100), ("project", 150))
+
+
+def stale_report(project: Path | None = None,
+                 touch_days: int = STALE_TOUCH_DAYS) -> list[dict]:
+    """Read-only staleness report over vault + project memory notes.
+
+    One entry per stale note: {path, title, reasons[]}. Reasons: expired
+    `valid_until`, untouched for >touch_days (mtime), over the
+    memory-hygiene line budget (vault 100 / project memory 150).
+    Report-only — callers decide (delete, rewrite, or SUPERSEDE).
+    """
+    from datetime import datetime, timedelta, timezone
+
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=touch_days)).timestamp()
+    report: list[dict] = []
+    seen: set[Path] = set()
+    for d in _vault_dirs(project):
+        if not d.is_dir():
+            continue
+        harness_vault = d.resolve() == config.harness_root().resolve() / "vault"
+        budget = 100 if harness_vault else 150
+        for md in sorted(d.rglob("*.md")):
+            try:
+                real = md.resolve()
+                if real in seen:
+                    continue
+                seen.add(real)
+                content = md.read_text(errors="replace")
+                st = md.stat()
+            except OSError:
+                continue
+            reasons = []
+            _as_of, valid_until = _meta_dates(content)
+            if _is_expired(valid_until):
+                reasons.append(f"expired valid_until {valid_until}")
+            if st.st_mtime < cutoff:
+                reasons.append(f"untouched >{touch_days}d")
+            lines = len(content.splitlines())
+            if lines > budget:
+                reasons.append(f"{lines} lines over budget {budget}")
+            if reasons:
+                title_m = _TITLE_RE.search(content)
+                report.append({
+                    "path": str(md),
+                    "title": title_m.group(1).strip() if title_m else md.stem,
+                    "reasons": reasons,
+                })
+    return report
