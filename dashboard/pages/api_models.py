@@ -10,9 +10,26 @@ from fastapi.responses import JSONResponse
 from pipa.model_registry import TIER_ALIASES, normalize_tier
 
 from data import models as models_data
-from pages.api_common import _known_aliases, _verify_effective
+from pages.api_common import _known_aliases
 
 router = APIRouter()
+
+
+def _rerender_agents() -> None:
+    """Push saved overrides into the deployed agent files.
+
+    The override store is not the agent; the rendered frontmatter is. Without
+    this, a save updates state/agent_llm_overrides.json and every deployed
+    agent keeps the tier it was last rendered with — the dashboard toast says
+    success while the agent ignores it. Failure is loud: the override was
+    saved but did not take effect, which is the whole bug this prevents.
+    """
+    from pipa.runtime import refresh_agents
+
+    try:
+        refresh_agents()
+    except Exception as exc:  # noqa: BLE001 — surface it, never swallow
+        raise HTTPException(500, f"override saved, but agent re-render failed: {exc}")
 
 
 @router.put("/api/tier-models")
@@ -41,11 +58,11 @@ async def api_set_tier_models(request: Request):
         raise HTTPException(400, msg)
     from data import services as services_data
 
-    try:
-        _verify_effective()
-    except Exception as exc:
-        raise HTTPException(500, f"composed config invalid, gateway untouched: {exc}")
+    # gateway_restart verifies the composed config before it spawns anything
+    # (pipa.services.start_litellm -> config.verify_effective), so there is no
+    # window here where a bad compose reaches a running gateway.
     restarted, detail = services_data.gateway_restart()
+    _rerender_agents()
     out = {"ok": True,
            "detail": detail or ("gateway restarted" if restarted else "saved (gateway restart failed)"),
            "restarted": restarted}
@@ -109,6 +126,7 @@ async def api_set_agent_tiers(request: Request):
         if not str(agent).strip():
             raise HTTPException(400, "agent name must not be empty")
         agents_data.set_tier_override(str(agent), normalize_tier(str(tier)))
+    _rerender_agents()
     return JSONResponse({"ok": True, "agent_tiers": dict(mapping)})
 
 
@@ -125,6 +143,7 @@ async def api_set_agent(agent_name: str, request: Request):
         if tier not in TIER_ALIASES:
             raise HTTPException(400, f"unknown tier {tier!r}")
         agents_data.set_tier_override(agent_name, tier)
+        _rerender_agents()
         return JSONResponse({"ok": True, "agent": agent_name, "tier": tier})
     if payload.get("model"):
         raise HTTPException(400, "pipa agents run on tiers, not direct models - assign a tier instead")
@@ -133,11 +152,12 @@ async def api_set_agent(agent_name: str, request: Request):
 
 @router.post("/api/agents/{agent_name}/reset")
 def api_reset_agent(agent_name: str):
-    from pipa.runtime import AGENT_MODEL_MAP
+    from pipa.runtime import agent_tier
     from data import agents as agents_data
 
     agents_data.reset_override(agent_name)
-    default = normalize_tier(AGENT_MODEL_MAP.get(agent_name, ""))
+    _rerender_agents()
+    default = normalize_tier(agent_tier(agent_name))
     return JSONResponse({"ok": True, "agent": agent_name, "tier": default})
 
 

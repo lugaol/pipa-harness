@@ -40,6 +40,30 @@ def runtime_mix(summaries: list) -> list:
     return counts.most_common()
 
 
+def empty_spend() -> dict:
+    """Zeroed spend summary — the shape callers degrade to."""
+    return {"rows": 0, "cost_usd": 0.0, "tokens_in": 0, "tokens_out": 0}
+
+
+def empty_report(sessions: int = 0, spend: dict | None = None) -> dict:
+    """A complete, valid rollup with nothing in it.
+
+    Every key `build_report` produces, so a degraded report is renderable by
+    exactly the same template as a real one. Two page functions used to invent
+    their own fallback dicts and got the shape subtly different —
+    `sessions: len(summaries)` on one page, `sessions: 0` on the other —
+    which is how the same panel started disagreeing with itself.
+    """
+    return {
+        "sessions": sessions,
+        "per_day": [],
+        "top_tools": [],
+        "top_models": [],
+        "runtimes": [],
+        "spend": spend or empty_spend(),
+    }
+
+
 def build_report(summaries: list, spend: dict) -> dict:
     """One JSON-able rollup for CLI (`--json`) and dashboard alike."""
     return {
@@ -55,6 +79,21 @@ def build_report(summaries: list, spend: dict) -> dict:
             "tokens_out": (spend or {}).get("tokens_out", 0),
         },
     }
+
+
+def build_report_or_empty(summaries: list, spend: dict) -> dict:
+    """`build_report` that degrades instead of raising, with a reason attached.
+
+    Web callers must never 500 on a malformed ledger. The `error` key lets the
+    page say "could not read the data" rather than rendering a confident
+    all-zero report.
+    """
+    try:
+        return build_report(summaries, spend)
+    except Exception as exc:  # noqa: BLE001 — a report must always render
+        out = empty_report(len(summaries or []), spend)
+        out["error"] = f"{type(exc).__name__}: {exc}"[:200]
+        return out
 
 
 def format_report(report: dict) -> str:

@@ -17,7 +17,7 @@ SUMMARIES = [
      "tools": {"read": 5, "edit": 2}, "models": {"mid": 3}},
     {"id": "b", "runtime": "opencode", "start": "2026-09-01T12:00:00",
      "tools": {"read": 1}, "models": {"low": 2}},
-    {"id": "c", "runtime": "dsh", "start": "2026-09-02T09:00:00",
+    {"id": "c", "runtime": "cli", "start": "2026-09-02T09:00:00",
      "tools": {"grep": 4}, "models": {"mid": 1}},
 ]
 
@@ -39,7 +39,7 @@ def test_top_counts_merge_across_sessions():
 
 def test_runtime_mix():
     assert dict(metrics_lib.runtime_mix(SUMMARIES)) == {
-        "opencode": 2, "dsh": 1}
+        "opencode": 2, "cli": 1}
 
 
 def test_empty_inputs_never_crash():

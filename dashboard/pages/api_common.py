@@ -19,19 +19,3 @@ def _catalog() -> list:
 
 def _known_aliases() -> set:
     return {c["id"] for c in _catalog()}
-
-
-def _verify_effective() -> None:
-    """Fail closed: the composed gateway config must parse with a model_list.
-
-    A bad write must never take the running gateway down — verify before
-    any restart (ia save_registry discipline).
-    """
-    import yaml
-
-    from pipa import config
-
-    effective = config.models_dir() / ".effective.yaml"
-    data = yaml.safe_load(effective.read_text())
-    if not isinstance(data, dict) or not data.get("model_list"):
-        raise ValueError(".effective.yaml has no model_list after compose")

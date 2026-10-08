@@ -27,4 +27,10 @@ async def save_agent_tier(request: Request):
     nxt = str(fields.get("next") or "/models")
     if not nxt.startswith("/") or nxt.startswith("//"):
         nxt = "/models"
+    try:
+        from pipa.runtime import refresh_agents
+
+        refresh_agents()
+    except Exception:  # noqa: BLE001 — the override saved but did not deploy
+        return RedirectResponse(url=f"{nxt}?error=1", status_code=303)
     return RedirectResponse(url=f"{nxt}?saved=1", status_code=303)

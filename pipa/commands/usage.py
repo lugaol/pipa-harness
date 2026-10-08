@@ -14,7 +14,7 @@ def cmd_usage_report(args) -> int:
     project = config.find_project()
     log = config.session_log_path(project) if project else None
     summaries = session_mod.sessions(log) if log and log.exists() else []
-    spend = spend_mod.summarize(getattr(args, "since", None) or None)
+    spend = spend_mod.summarize(since=getattr(args, "since", None) or None)
     report = metrics_lib.build_report(summaries, spend)
     if getattr(args, "json", False):
         print(json.dumps(report, indent=2))

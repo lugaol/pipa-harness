@@ -11,6 +11,7 @@ from pathlib import Path
 from typing import List
 
 from pipa import config
+from pipa import runtime as runtime_mod
 from pipa.runtime import names as runtime_names
 
 
@@ -37,11 +38,12 @@ def set_runtime(path_str: str, runtime: str) -> tuple[bool, str]:
     if runtime not in runtime_names():
         return False, f"runtime must be one of: {', '.join(runtime_names())}"
     project = Path(path_str)
-    marker = config.pipa_dir(project) / config.RUNTIME_MARKER
     try:
-        marker.parent.mkdir(parents=True, exist_ok=True)
-        marker.write_text(runtime + "\n")
-    except OSError as exc:
+        # Owns the marker file, its validation and its error message. This
+        # used to mkdir+write the file inline, so a third module reading that
+        # marker had to guess the format.
+        runtime_mod.write_project_runtime(project, runtime)
+    except Exception as exc:
         return False, f"could not write runtime marker: {exc}"
     try:
         config.register_project(project, runtime)
@@ -51,13 +53,10 @@ def set_runtime(path_str: str, runtime: str) -> tuple[bool, str]:
 
 
 def _read_runtime(project: Path) -> str:
-    runtime_file = config.pipa_dir(project) / config.RUNTIME_MARKER
     try:
-        if runtime_file.is_file():
-            return runtime_file.read_text().strip()
-    except OSError:
-        pass
-    return ""
+        return runtime_mod.read_project_runtime(project) or ""
+    except Exception:
+        return ""
 
 
 def _count_md(directory: Path, pattern: str = "*.md") -> int:

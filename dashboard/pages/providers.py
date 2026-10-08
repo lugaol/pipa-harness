@@ -16,14 +16,12 @@ router = APIRouter()
 def providers_view(request: Request):
     try:
         rows = providers_data.list_providers()
-        summary = providers_data.provider_summary()
     except Exception:
-        rows, summary = [], {"total": 0, "ready": 0}
+        rows = []
     return render(
         request,
         "providers.html",
         rows=rows,
-        summary=summary,
         tested=request.query_params.get("tested", ""),
         test_ok=request.query_params.get("ok", "") != "0",
         test_msg=request.query_params.get("msg", ""),

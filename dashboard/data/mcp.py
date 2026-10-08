@@ -23,8 +23,19 @@ def _server_path(name: str) -> Optional[Path]:
 
 
 def list_servers() -> List[dict]:
-    """[{name, enabled, type, detail}] sorted with enabled first."""
+    """[{name, enabled, type, detail}] sorted with enabled first.
+
+    `enabled` must agree with what the runtime actually merges.
+    pipa.runtime._mcp_registry treats a MISSING key as enabled
+    (`data.get("enabled", True)`); this used to read `bool(data.get("enabled"))`,
+    i.e. missing means disabled. The two disagreed, so a server with no
+    `enabled` key was merged into the agent's tools while the page rendered it
+    "disabled" with an Enable button that toggled a key nothing read.
+    """
+    from pipa.runtime import mcp_registry
+
     root = config.mcp_dir()
+    enabled_names = set(mcp_registry())
     out: List[dict] = []
     try:
         dirs = sorted(root.iterdir())
@@ -38,10 +49,13 @@ def list_servers() -> List[dict]:
             data = json.loads(cfg.read_text())
         except (OSError, ValueError):
             data = {}
+        if not isinstance(data, dict):
+            data = {}
         mcp_block = data.get("mcp") or {}
+        name = str(data.get("name") or d.name)
         out.append({
-            "name": str(data.get("name") or d.name),
-            "enabled": bool(data.get("enabled")),
+            "name": name,
+            "enabled": name in enabled_names,
             "type": str(mcp_block.get("type") or "—"),
             "detail": str(mcp_block.get("url")
                           or mcp_block.get("command")

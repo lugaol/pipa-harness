@@ -1,11 +1,13 @@
 {% extends "base.html" %}
-{% block title %}Session {{ sid }} · pipa dashboard{% endblock %}
+{% block title %}Session {{ sid }} · pipa{% endblock %}
+{% block pagetitle %}Session{% endblock %}
+{% block pagesubtitle %}{{ sid }}{% endblock %}
 {% block content %}
-<h1>Session <span class="mono">{{ sid }}</span></h1>
+<p class="mono path-cell">session {{ sid }}</p>
 <p class="dim">
   runtime {{ header.runtime }} · {{ header.events }} events · {{ header.duration }} ·
   tools[{{ header.tools }}] · models[{{ header.models }}]
 </p>
-<p><a href="/sessions">← all sessions</a></p>
+<p><a href="/observability?tab=sessions">← all sessions</a></p>
 {% with rows=rows %}{% include "timeline.html" %}{% endwith %}
 {% endblock %}

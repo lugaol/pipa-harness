@@ -60,7 +60,23 @@ done
 
 export PATH="$DEST/bin:$PATH"
 
-# 3. next steps ───────────────────────────────────────────────────────────────
+# 3. one-command wiring (generic: machine + project) ───────────────────────
+# Default: clone + PATH only (safe for curl|bash). Set PIPA_AUTO_UP=1 to also
+# install the agent runtime (opencode), start services, and wire.
+if [ "${PIPA_AUTO_UP:-0}" = "1" ]; then
+	say "PIPA_AUTO_UP=1 — running full wiring (this takes a few minutes)"
+	sh "$DEST/install/steps/00-deps.sh"
+	sh "$DEST/install/steps/10-core.sh"
+	sh "$DEST/install/steps/20-runtimes.sh"
+	sh "$DEST/install/steps/40-wire.sh"
+else
+	say "one-command full install:"
+	say "  PIPA_AUTO_UP=1 sh -c \"\$(curl -fsSL https://raw.githubusercontent.com/lugaol/pipa-harness/main/bootstrap.sh)\""
+	say "or step by step:"
+	say "  pipa up            # tools + services + wire current project"
+fi
+
+# 4. next steps ───────────────────────────────────────────────────────────────
 say "installed pipa_harness at $DEST"
 say ""
 say "Next steps:"
@@ -68,5 +84,5 @@ say "  pipa up            # tools + services + wire current project"
 say "  pipa status        # health check"
 say ""
 say "Optional component installs:"
-say "  cd $DEST && bin/pipa install <uv|ollama|litellm|graphify|dsh|opencode|apps>"
+say "  cd $DEST && bin/pipa install <uv|ollama|litellm|graphify|opencode|apps>"
 say "  make -C $DEST/install wire      # same as 'pipa up', no GUI apps/model pulls"

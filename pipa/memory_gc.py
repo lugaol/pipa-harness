@@ -28,20 +28,26 @@ VAULT_BUDGET = 100
 PROJECT_MEMORY_BUDGET = 150
 
 
-def _cutoff(days: int) -> str:
+def _iso_cutoff(days: int) -> str:
     return (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
 
 
 def collect_candidates(state_dir: Path, vault: Path,
                        summaries_days: int = 180,
-                       scratch_days: int = 30) -> dict:
+                       scratch_days: int = 30,
+                       project_memory: Path | None = None) -> dict:
     """{rel_path: (action, reason)} eligible for GC. Pure sink: no I/O writes.
 
     actions: "rollup" (summaries -> monthly rollup), "prune" (scratch),
-    "report" (over-budget vault notes — human decides).
+    "report" (over-budget notes — human decides).
+
+    Budgets two scopes, vault and project memory. It used to iterate a 1-tuple
+    `(("vault", vault, VAULT_BUDGET),)` — a stray trailing comma ate the
+    project-memory entry, so PROJECT_MEMORY_BUDGET was defined, documented, and
+    never applied to anything.
     """
     out: dict[str, tuple[str, str]] = {}
-    summaries_cut, scratch_cut = _cutoff(summaries_days), _cutoff(scratch_days)
+    summaries_cut, scratch_cut = _iso_cutoff(summaries_days), _iso_cutoff(scratch_days)
 
     summaries = state_dir / "summaries"
     if summaries.is_dir():
@@ -66,8 +72,10 @@ def collect_candidates(state_dir: Path, vault: Path,
                 out[f"scratch/{f.relative_to(scratch).as_posix()}"] = (
                     "prune", f"scratch older than {scratch_days}d")
 
-    for scope, root, budget in (
-            ("vault", vault, VAULT_BUDGET),):
+    scopes = [("vault", vault, VAULT_BUDGET)]
+    if project_memory is not None:
+        scopes.append(("memory", project_memory, PROJECT_MEMORY_BUDGET))
+    for scope, root, budget in scopes:
         if not root.is_dir():
             continue
         for note in sorted(root.rglob("*.md")):

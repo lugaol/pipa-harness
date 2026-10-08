@@ -64,6 +64,16 @@ def _parse_ts(value) -> datetime | None:
     return dt
 
 
+def on_or_after(ts, since: str) -> bool:
+    """True when `ts` is at/after the ISO timestamp `since`.
+
+    The single owner of the "is this row in range" question. The dashboard
+    used to answer it with a raw string compare while this module parsed ISO
+    with timezone, so a summary and the table under it could disagree.
+    """
+    return _on_or_after(ts, _parse_ts(since), since)
+
+
 def _on_or_after(ts, floor: datetime | None, since_raw: str) -> bool:
     if not ts:
         return False

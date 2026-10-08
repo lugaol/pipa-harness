@@ -2,6 +2,7 @@
 {% set is_memory = memory|default(false) %}
 {% set list_url = ('/knowledge?tab=memory&scope=' + tier + (('&proj=' + proj) if proj else '')) if is_memory else ('/context?tier=' + tier + '&tab=' + tab) %}
 {% block title %}{{ 'New' if creating else 'Edit' }} · {{ 'Memory' if is_memory else 'Context' }} · pipa{% endblock %}
+{% block pagetitle %}Editing{% endblock %}
 {% block content %}
 <h1 style="font-size:1.2rem">{{ 'New' if creating else 'Edit' }} <span class="mono" style="font-weight:400">{{ rel }}</span></h1>
 <p class="dim small" style="margin-bottom:0.85rem">

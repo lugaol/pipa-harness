@@ -1,71 +1,90 @@
 #!/usr/bin/env python3
 """
-Lightweight OpenTelemetry tracing for pipa_harness.
-Stores traces in SQLite for local dev; exports to OTel collector when configured.
+Lightweight tracing CLI for pipa_harness.
 
-Usage:
-  python tools/tracing.py start <agent_name> <task_type>
-  python tools/tracing.py end <agent_name> <status> <tokens> <latency_ms>
-  python tools/tracing.py export
+Unified schema owner: hooks/pipa_trace.py (PipaTraceHook). This module keeps
+the `start|end|export` CLI but writes the SAME tables/columns so both writers
+never conflict (fixes specs/010 2-schema problem).
 """
-import sqlite3
 import json
-import os
+import sqlite3
 import sys
-from datetime import datetime
 from pathlib import Path
 
 DB_PATH = Path(__file__).parent.parent / "state" / "traces.db"
 
+SCHEMA = """
+CREATE TABLE IF NOT EXISTS traces (
+    id INTEGER PRIMARY KEY,
+    session_id TEXT,
+    agent_name TEXT,
+    model TEXT,
+    tokens_in INTEGER DEFAULT 0,
+    tokens_out INTEGER DEFAULT 0,
+    latency_ms REAL DEFAULT 0,
+    tools_called TEXT DEFAULT '[]',
+    status TEXT DEFAULT 'success',
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+CREATE TABLE IF NOT EXISTS hook_events (
+    id INTEGER PRIMARY KEY,
+    hook_name TEXT,
+    event_type TEXT,
+    agent_name TEXT,
+    duration_ms REAL DEFAULT 0,
+    success BOOLEAN DEFAULT 1,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+);
+"""
+
+
 def init_db():
     DB_PATH.parent.mkdir(parents=True, exist_ok=True)
     conn = sqlite3.connect(DB_PATH)
-    conn.execute("""
-        CREATE TABLE IF NOT EXISTS traces (
-            id INTEGER PRIMARY KEY AUTOINCREMENT,
-            agent TEXT,
-            task_type TEXT,
-            status TEXT,
-            tokens INTEGER,
-            latency_ms INTEGER,
-            model_alias TEXT,
-            created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
-        )
-    """)
+    conn.executescript(SCHEMA)
     conn.commit()
     return conn
 
+
 def start_trace(agent_name, task_type, model_alias="unknown"):
     conn = init_db()
-    conn.execute(
-        "INSERT INTO traces (agent, task_type, status, tokens, latency_ms, model_alias) VALUES (?, ?, ?, ?, ?, ?)",
-        (agent_name, task_type, "running", 0, 0, model_alias)
+    cur = conn.execute(
+        "INSERT INTO traces (session_id, agent_name, model, tools_called, status)"
+        " VALUES (?, ?, ?, ?, 'running')",
+        ("cli", agent_name, model_alias, json.dumps([task_type])),
     )
+    trace_id = cur.lastrowid
     conn.commit()
-    trace_id = conn.execute("SELECT last_insert_rowid()").fetchone()[0]
     conn.close()
     print(f"TRACE_START id={trace_id} agent={agent_name} task={task_type}")
+
 
 def end_trace(agent_name, task_type, status, tokens, latency_ms):
     conn = init_db()
     conn.execute(
-        "UPDATE traces SET status=?, tokens=?, latency_ms=? WHERE agent=? AND task_type=? AND status='running' ORDER BY id DESC LIMIT 1",
-        (status, tokens, latency_ms, agent_name, task_type)
+        "UPDATE traces SET status=?, tokens_out=?, latency_ms=? WHERE agent_name=?"
+        " AND status='running' ORDER BY id DESC LIMIT 1",
+        (status, tokens, latency_ms, agent_name),
     )
     conn.commit()
     conn.close()
     print(f"TRACE_END agent={agent_name} task={task_type} status={status} tokens={tokens} latency={latency_ms}ms")
 
+
 def export_traces():
     conn = init_db()
-    rows = conn.execute("SELECT * FROM traces ORDER BY created_at DESC LIMIT 100").fetchall()
+    rows = conn.execute(
+        "SELECT id, session_id, agent_name, model, tokens_in, tokens_out,"
+        " latency_ms, status, created_at FROM traces ORDER BY created_at DESC LIMIT 100"
+    ).fetchall()
     conn.close()
     for row in rows:
         print(json.dumps({
-            "id": row[0], "agent": row[1], "task_type": row[2],
-            "status": row[3], "tokens": row[4], "latency_ms": row[5],
-            "model_alias": row[6], "created_at": row[7]
+            "id": row[0], "session_id": row[1], "agent": row[2], "model": row[3],
+            "tokens_in": row[4], "tokens_out": row[5], "latency_ms": row[6],
+            "status": row[7], "created_at": row[8],
         }))
+
 
 if __name__ == "__main__":
     if len(sys.argv) < 2:

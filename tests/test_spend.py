@@ -132,3 +132,53 @@ def test_report_and_summary_leak_no_content(ledger):
         assert SECRET not in text
         assert "prompt" not in text.lower()
         assert "messages" not in text.lower()
+
+
+# ── the dashboard adapter ──────────────────────────────────────────────────
+
+def test_dashboard_spend_reads_the_real_ledger(monkeypatch, tmp_path):
+    """The Spend tab must not report zero against a populated ledger.
+
+    Regression: data/spend.py returned the ledger path as a str while
+    pipa.spend.summarize expects a Path and calls .exists(). The resulting
+    AttributeError was swallowed by a broad `except` and rendered as an
+    all-zero summary — 0 rows and $0.00 against hundreds of real rows, with
+    nothing looking broken.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
+    from data import spend as data_spend
+
+    ledger = tmp_path / "spend.ndjson"
+    ledger.write_text("\n".join(json.dumps(r) for r in ROWS) + "\n")
+    monkeypatch.setenv("PIPA_SPEND_LOG", str(ledger))
+
+    path = data_spend.ledger_path()
+    assert isinstance(path, Path), "ledger_path must return a Path, not a str"
+    s = data_spend.summary()
+    assert s.get("error") is None, s.get("error")
+    assert s["rows"] == len(ROWS), s
+    assert data_spend.recent_rows(limit=100)
+
+
+def test_summary_and_table_agree_on_the_since_filter(monkeypatch, tmp_path):
+    """One filter, one answer: the totals and the rows under them must match.
+
+    Regression: recent_rows compared timestamps as raw strings while
+    pipa.spend parsed ISO with timezone, so a filtered summary could count
+    rows the filtered table did not show.
+    """
+    sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "dashboard"))
+    from data import spend as data_spend
+
+    ledger = tmp_path / "spend.ndjson"
+    ledger.write_text("\n".join(json.dumps(r) for r in ROWS) + "\n")
+    monkeypatch.setenv("PIPA_SPEND_LOG", str(ledger))
+
+    for since in (None, "2026-08-20T00:00:00Z", "2026-08-21T00:00:00Z",
+                  "2030-01-01T00:00:00Z"):
+        summary = data_spend.summary(since=since)
+        rows = data_spend.recent_rows(since=since, limit=10_000)
+        assert summary["rows"] == len(rows), (
+            f"since={since}: summary counts {summary['rows']} but the table "
+            f"shows {len(rows)}"
+        )

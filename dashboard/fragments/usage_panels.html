@@ -1,0 +1,36 @@
+{# Adoption rollup panels, shared by /observability and /team.
+
+   These two blocks were character-identical in both templates (bar
+   indentation) and both read the same `usage` rollup, which the two page
+   functions built with near-identical try/except fallbacks. One markup, one
+   owner: a second copy is a second thing to drift. Expects `usage`
+   (pipa.metrics.build_report) in the context. #}
+{% if usage.per_day %}
+<section class="panel">
+  <h2>Sessions per day</h2>
+  <div class="table-wrap">
+  <table class="frag-table">
+    <thead><tr><th scope="col">day</th><th scope="col">sessions</th></tr></thead>
+    <tbody>
+      {% for day, n in usage.per_day %}<tr><td class="mono small">{{ day }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+
+{% for title, rows in [('Top tools', usage.top_tools), ('Top session models', usage.top_models), ('Runtimes', usage.runtimes)] %}
+{% if rows %}
+<section class="panel">
+  <h2>{{ title }}</h2>
+  <div class="table-wrap">
+  <table class="frag-table">
+    <thead><tr><th scope="col">name</th><th scope="col">count</th></tr></thead>
+    <tbody>
+      {% for name, n in rows %}<tr><td class="mono small">{{ name }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
+    </tbody>
+  </table>
+  </div>
+</section>
+{% endif %}
+{% endfor %}

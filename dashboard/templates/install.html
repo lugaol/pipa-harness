@@ -2,9 +2,6 @@
 {% block title %}Install · pipa{% endblock %}
 {% block pagetitle %}Install{% endblock %}
 {% block pagesubtitle %}staged setup — one job at a time, secrets scrubbed from the log.{% endblock %}
-{% block pagecss %}
-<link rel="stylesheet" href="/static/css/pages/install.css">
-{% endblock %}
 {% block content %}
 <section id="install-page">
   <section id="install-section">
@@ -15,9 +12,9 @@
     <div class="agents-table-wrapper">
       <table class="agents-table">
         <thead>
-          <tr><th>Stage</th><th>Detail</th><th>State</th><th></th></tr>
+          <tr><th scope="col">Stage</th><th scope="col">Detail</th><th scope="col">State</th><th scope="col"></th></tr>
         </thead>
-        <tbody id="install-stages-tbody"></tbody>
+        <tbody id="install-stages-tbody" aria-live="polite" aria-busy="true"></tbody>
       </table>
     </div>
   </section>
@@ -27,7 +24,7 @@
       <h3>Job log</h3>
       <span class="text-xs text-muted mono" id="job-state">no job yet</span>
     </div>
-    <pre id="job-log" class="log-output">loading…</pre>
+    <pre id="job-log" class="log-output" role="log" aria-live="polite">loading…</pre>
   </section>
 </section>
 {% endblock %}

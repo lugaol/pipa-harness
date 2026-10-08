@@ -1,45 +1,51 @@
 {% extends "base.html" %}
-{% block title %}Evals · pipa dashboard{% endblock %}
+{% block title %}Evals · pipa{% endblock %}
+{% block pagetitle %}Evals{% endblock %}
+{% block pagesubtitle %}the same suite that gates agent PRs{% endblock %}
 {% block content %}
-<h1>Evals</h1>
-<p class="dim">Runs <span class="mono">tools/evals/run.py</span> (agent contract checks) with a 60s timeout.</p>
-
-<form method="post" action="/api/evals/run" class="inline-form actions">
-  <button type="submit">Run evals</button>
-</form>
+<p class="dim">
+  Runs <span class="mono">tools/evals/run.py</span> on every load (39 checks over
+  9 agent files, well under a second). The same suite gates PRs in
+  <span class="mono">.github/workflows/agent-evals.yml</span>, so a red row here
+  is a red build.
+</p>
+<p class="dim small">
+  <a href="/docs">What each check asserts →</a>
+</p>
 
 {% if result %}
   {% if not result.ok %}
     <section class="panel">
-      <span class="badge warn">failed</span>
+      <span class="badge warn">runner failed</span>
       <pre class="mono error-box">{{ result.detail }}</pre>
     </section>
   {% else %}
     <p class="dim">
-      {{ result.total }} agent(s) checked ·
+      {{ result.total }} check(s) over {{ result.rows | length }} agent file(s) ·
       {% if result.failed %}<span class="badge warn">{{ result.failed }} failing</span>
       {% else %}<span class="badge ok">all pass</span>{% endif %}
     </p>
     <div class="table-wrap">
       <table>
-        <thead><tr><th>file</th><th>checks</th><th>verdict</th></tr></thead>
+        <thead><tr><th scope="col">file</th><th scope="col">check</th><th scope="col">verdict</th></tr></thead>
         <tbody>
           {% for r in result.rows %}
-          <tr>
-            <td class="mono">{{ r.file }}</td>
-            <td>
-              {% for c in r.checks %}
-              <div>{{ c.name }}: {% if c.ok %}<span class="badge ok">pass</span>{% else %}<span class="badge warn">FAIL</span>{% endif %}</div>
-              {% endfor %}
-            </td>
-            <td>{% if r.ok %}<span class="badge ok">pass</span>{% else %}<span class="badge warn">FAIL</span>{% endif %}</td>
-          </tr>
+            {% for c in r.checks %}
+            <tr>
+              <td class="mono">{{ r.file if loop.first else "" }}</td>
+              <td>{{ c.name }}</td>
+              <td>
+                {% if c.ok %}<span class="badge ok">pass</span>
+                {% else %}<span class="badge warn">FAIL</span> <span class="dim small">{{ c.msg }}</span>{% endif %}
+              </td>
+            </tr>
+            {% endfor %}
           {% endfor %}
         </tbody>
       </table>
     </div>
   {% endif %}
 {% else %}
-  {% with message='No eval run yet — press “Run evals”.' %}{% include "empty_state.html" %}{% endwith %}
+  {% with message='No eval report available.' %}{% include "empty_state.html" %}{% endwith %}
 {% endif %}
 {% endblock %}

@@ -3,9 +3,7 @@
 A runtime is an agent runner that consumes the shared harness markdown
 (AGENTS.md, rules/, skills/, agents/) and talks to models through the
 LiteLLM gateway. Each runtime ships its config templates under
-clis/<name>/ and wires THE MACHINE (never the project): opencode renders
-~/.config/opencode/opencode.jsonc (with the mcp/ registry merged in);
-dsh writes ~/.dsh/cordis.patch.yml + .credentials.yaml.
+clis/<name>/ and wires THE MACHINE (never the project).
 
 Per-project runtime selection lives in <project>/.pipa/runtime (one word).
 """
@@ -19,9 +17,13 @@ from pathlib import Path
 
 from . import config
 
-# pipa agent -> model tier (lowest..xhigh; used when generating runtime configs)
-AGENT_MODEL_MAP = {
-    "orchestrator": "xhigh",
+# Fallback agent -> tier defaults, used ONLY when models/tiers.yaml cannot be
+# read (a checkout mid-edit, or a stripped install). The owner is
+# models/tiers.yaml::agent_tiers — see `agent_tiers()`. Two owners is how this
+# drifted before: a hardcoded map here and a YAML map there, with a doctor
+# check that only warned about the disagreement.
+_FALLBACK_AGENT_TIERS = {
+    "orchestrator": "mid",
     "dev": "mid",
     "qa": "low",
     "explorer": "lowest",
@@ -32,6 +34,28 @@ AGENT_MODEL_MAP = {
     "researcher": "high",
 }
 
+
+def agent_tiers() -> dict[str, str]:
+    """{agent: tier} — the single owner is models/tiers.yaml::agent_tiers.
+
+    Every consumer (opencode config rendering, dashboard, recommendations,
+    doctor) reads this, so a user editing tiers.yaml changes behaviour
+    everywhere at once. Falls back to `_FALLBACK_AGENT_TIERS` only when the
+    YAML is unreadable.
+    """
+    from pipa.model_registry import TIER_ALIASES, agent_tier_defaults, normalize_tier
+
+    declared = agent_tier_defaults()
+    if declared:
+        return declared
+    return {a: t for a, t in _FALLBACK_AGENT_TIERS.items() if normalize_tier(t) in TIER_ALIASES}
+
+
+def agent_tier(name: str) -> str:
+    """Declared default tier for one agent ("" when undeclared)."""
+    return agent_tiers().get(name, "")
+
+
 RUNTIME_FILE = "runtime"
 
 
@@ -39,7 +63,7 @@ def primary_tier() -> str:
     """Tier driving the runtime primary model.
 
     User override (`orchestrator` entry in the tier-override store) wins;
-    else the `orchestrator` default in AGENT_MODEL_MAP. "" when neither
+    else the `orchestrator` default from models/tiers.yaml. "" when neither
     is a known tier — callers fall back to strongest-assigned.
     """
     from pipa.agent_tiers import override_for
@@ -48,7 +72,7 @@ def primary_tier() -> str:
     tier = normalize_tier(override_for("orchestrator") or "")
     if tier in TIER_ALIASES:
         return tier
-    default = normalize_tier(AGENT_MODEL_MAP.get("orchestrator", ""))
+    default = normalize_tier(agent_tier("orchestrator"))
     return default if default in TIER_ALIASES else ""
 
 
@@ -75,14 +99,6 @@ RUNTIMES: dict[str, Runtime] = {
             binaries=["opencode"],
             install_hint="curl -fsSL https://opencode.ai/install | bash",
         ),
-        Runtime(
-            name="deepseek-harness",
-            label="DeepSeek Harness",
-            description="DeepSeek agent harness with native NDJSON session log",
-            binaries=["deepseek-harness", "dsh"],
-            npm_package="@deepseek-ai/dsh",
-            install_hint="npm install -g @deepseek-ai/dsh",
-        ),
     ]
 }
 
@@ -102,7 +118,8 @@ def installed() -> list[str]:
 def resolve(requested: str | None) -> str:
     """Resolve a requested runtime name ('auto' or None) to a concrete one.
 
-    Auto-detection prefers DeepSeek Harness when available.
+    `opencode` is the only runtime, so this returns it unless the caller asks
+    for something unknown — in which case it raises rather than guessing.
     """
     if requested and requested != "auto":
         if requested not in RUNTIMES:
@@ -110,9 +127,9 @@ def resolve(requested: str | None) -> str:
                 f"unknown runtime '{requested}' (choose: {', '.join(names())}, auto)"
             )
         return requested
+    if "opencode" in RUNTIMES:
+        return "opencode"
     found = installed()
-    if "deepseek-harness" in found:
-        return "deepseek-harness"
     if found:
         return found[0]
     return "opencode"  # default target; `pipa up` will install it
@@ -141,23 +158,40 @@ def project_runtime(project: Path) -> str:
 
 # ── wiring ──────────────────────────────────────────────────────────────────
 
-def _symlink(target: Path | str, link: Path, actions: list[str]) -> None:
-    if link.is_symlink() or link.exists():
-        if link.is_symlink() and os.readlink(link) == str(target):
-            return
-        actions.append(f"~ kept existing {link}")
-        return
-    link.symlink_to(target)
-    actions.append(f"+ {link} -> {target}")
+# Sentinel key stamped into every rendered runtime config. It is how a later
+# `pipa up` knows the file is OURS and may be regenerated, versus a file the
+# user wrote by hand which must be left alone. The previous guard was
+# `"pipa" in text`, which matched the substring inside `sk-pipa-local`, inside
+# the instruction globs and inside any comment — so it matched every config
+# pipa had ever written, and the file was then never re-rendered again. Tier
+# changes stopped reaching the runtime the day the file was first created.
+WIRED_MARKER = "_pipa_generated"
+
+# Strongest last: tier order doubles as the fallback order.
+TIER_ORDER = ("lowest", "low", "mid", "high", "xhigh")
 
 
-def _mcp_registry(root: Path) -> dict[str, dict]:
-    """Enabled MCP servers from the mcp/ registry.
+def _is_wired(gcfg: Path) -> bool:
+    """True when gcfg carries our marker (safe to regenerate)."""
+    try:
+        return WIRED_MARKER in gcfg.read_text()
+    except OSError:
+        return False
+
+
+def mcp_registry() -> dict[str, dict]:
+    """Enabled MCP servers from the mcp/ registry — the single owner.
 
     Registry entry (mcp/<name>/config.json):
       {"name": "context7", "enabled": true,
        "mcp": {"type": "remote", "url": "...", ...}}
     Future integrations = drop a new folder; nothing else changes.
+
+    A MISSING `enabled` key means enabled. The dashboard used to read the same
+    file with the opposite default, so it rendered "disabled" for servers the
+    runtime was in fact merging.
+
+    Folders starting with "_" are scaffolding and never merged.
     """
     import json
 
@@ -181,28 +215,11 @@ def _mcp_registry(root: Path) -> dict[str, dict]:
     return servers
 
 
-def _mcp_fragments(root: Path) -> tuple[dict, dict]:
-    servers = _mcp_registry(root)
+def _mcp_fragments() -> tuple[dict, dict]:
+    servers = mcp_registry()
     return servers, {f"{name}_*": "allow" for name in servers}
 
 
-def _render_dsh_models(text: str, root: Path) -> str:
-    """Replace @DSH_MODELS@ + the default model with registry-derived values."""
-    from pipa.model_registry import TIER_ALIASES, runtime_model_list, tier_resolution
-
-    lines = []
-    for m in runtime_model_list():
-        lines.append(f"          - id: {m['id']}")
-        lines.append(f"            name: {m['name']}")
-    text = text.replace("@DSH_MODELS@", "\n".join(lines))
-
-    # Default agent model = strongest tier the user actually assigned.
-    assigned = [t for t in TIER_ALIASES if t in tier_resolution()]
-    if assigned:
-        import re as _re
-
-        text = _re.sub(r"(?m)^(\s*model: )\w+$", rf"\g<1>{assigned[-1]}", text)
-    return text
 
 
 def _strip_jsonc(text: str) -> str:
@@ -244,9 +261,13 @@ def render_opencode_config(root: Path) -> dict:
 
     rt_dir = root / "clis" / "opencode"
     cfg = json.loads(_strip_jsonc((rt_dir / "global.jsonc").read_text()))
-    servers, perms = _mcp_fragments(root)
+    servers, perms = _mcp_fragments()
     cfg["mcp"] = servers
     cfg.setdefault("permission", {}).update(perms)
+    cfg[WIRED_MARKER] = {
+        "by": "pipa up / dashboard",
+        "regenerate": "delete this file, or edit clis/opencode/global.jsonc",
+    }
 
     from pipa.model_registry import runtime_model_list, tier_resolution, TIER_ALIASES
 
@@ -309,6 +330,91 @@ def _write_plugin(gdir: Path, filename: str, content: str, actions: list,
         actions.append(f"+ wrote {plugin_src} ({purpose})")
 
 
+def effective_agent_tier(name: str) -> str:
+    """The tier an agent should actually run on.
+
+    Precedence: user override (dashboard Agents page, state/
+    agent_llm_overrides.json) > declared default (models/tiers.yaml).
+
+    A tier the gateway cannot route — never assigned, or assigned to a model
+    whose API key is missing — is not usable. Rather than emit a frontmatter
+    that dies at request time, fall back to the strongest routable tier, so
+    every agent always has a working model. Returns "" when no tier at all is
+    routable (then the runtime default applies).
+    """
+    from pipa.agent_tiers import override_for
+    from pipa.model_registry import normalize_tier, tier_resolution
+
+    resolved = tier_resolution()
+    routable = [t for t in TIER_ORDER if t in resolved]
+    for candidate in (normalize_tier(override_for(name) or ""), agent_tier(name)):
+        if candidate in routable:
+            return candidate
+    return routable[-1] if routable else ""
+
+
+def render_agents(root: Path, gdir: Path) -> list[str]:
+    """Materialise <gdir>/agent/*.md from agents/*.md with tiers applied.
+
+    Rendered rather than symlinked because the effective tier is not a property
+    of the source file: it is the override store and the current tier
+    assignments. A symlink froze agents at whatever model id was written in the
+    frontmatter, which is what made the dashboard's per-agent tier picker a
+    no-op. Files are written only when their content changes, so this is cheap
+    to run on every `pipa up`.
+
+    Never writes through a symlinked out_dir — see the guard below.
+    """
+    import re
+
+    src_dir = root / "agents"
+    out_dir = gdir / "agent"
+    actions: list[str] = []
+    if not src_dir.is_dir():
+        return actions
+    if out_dir.is_symlink():
+        # An earlier version symlinked ~/.config/opencode/agent at the source
+        # tree, and a render through that link rewrote the harness's own
+        # agents/*.md — silently, because the write "succeeded". Replace the
+        # link with a real directory before rendering.
+        actions.append(f"~ replaced symlink {out_dir} with a rendered directory")
+        out_dir.unlink()
+    out_dir.mkdir(parents=True, exist_ok=True)
+    for src in sorted(src_dir.glob("*.md")):
+        text = src.read_text()
+        tier = effective_agent_tier(src.stem)
+        if tier:
+            text = re.sub(
+                r"(?m)^model: .*$", f"model: litellm/{tier}", text, count=1
+            )
+        dest = out_dir / src.name
+        if dest.exists() and not dest.is_symlink() and dest.read_text() == text:
+            continue
+        if dest.is_symlink():
+            dest.unlink()
+        dest.write_text(text)
+        actions.append(f"+ agent/{src.name} on tier {tier or '(runtime default)'}")
+    return actions
+
+
+def refresh_agents(root: Path | None = None) -> list[str]:
+    """Re-render the deployed agent files after an override change.
+
+    The dashboard persists tier overrides to state/agent_llm_overrides.json;
+    until this runs, the change lives in state and every deployed agent keeps
+    the tier it was last rendered with — the save looks successful while the
+    agent ignores it. Called by the dashboard write paths; `pipa up` reaches
+    the same render through wire_opencode. Skipped when the runtime was never
+    wired, so a dashboard save never creates a global config dir as a side
+    effect. Returns the render actions (empty when nothing changed).
+    """
+    root = root or config.harness_root()
+    gdir = Path.home() / ".config" / "opencode"
+    if not gdir.is_dir():
+        return []
+    return render_agents(root, gdir)
+
+
 def wire_opencode(project: Path, root: Path) -> list[str]:
     """Global-only OpenCode wiring: ~/.config/opencode (config + shared agents
     + session-bus plugin).
@@ -323,7 +429,7 @@ def wire_opencode(project: Path, root: Path) -> list[str]:
     if not template.exists():
         actions.append(f"!! missing template {template}")
         return actions
-    if gcfg.exists() and "pipa" in gcfg.read_text():
+    if gcfg.exists() and _is_wired(gcfg):
         actions.append(f"~ kept existing {gcfg} (delete it to re-render)")
     else:
         gdir.mkdir(parents=True, exist_ok=True)
@@ -331,7 +437,7 @@ def wire_opencode(project: Path, root: Path) -> list[str]:
 
         gcfg.write_text(json.dumps(render_opencode_config(root), indent=2) + "\n")
         actions.append(f"+ wrote {gcfg}")
-    _symlink(root / "agents", gdir / "agent", actions)
+    actions.extend(render_agents(root, gdir))
 
     # session bus: auto-discovered plugin forwards events via `pipa hook`.
     # Create-only: an existing file (user's or ours) is never overwritten —
@@ -356,57 +462,10 @@ def wire_opencode(project: Path, root: Path) -> list[str]:
     return actions
 
 
-def wire_deepseek_harness(project: Path, root: Path) -> list[str]:
-    """Wire dsh to the LiteLLM gateway via its real patch format.
-
-    dsh config is machine-global: we write ~/.dsh/cordis.patch.yml (machine
-    layer, outranks per-profile layers) — only when missing or already
-    pipa-managed, never over user edits — plus ~/.dsh/.credentials.yaml with
-    the LITELLM_API_KEY ref on fresh installs (dsh resolves apiKeyEnv from
-    env or that file; no key ever in YAML). Projects carry nothing.
-    """
-    actions: list[str] = []
-    rt_dir = root / "clis" / "deepseek-harness"
-    template = rt_dir / "cordis.patch.yml"
-    if not template.exists():
-        actions.append(f"!! missing template {template}")
-        return actions
-
-    text = template.read_text().replace("@LITELLM_URL@", config.LITELLM_URL)
-    text = _render_dsh_models(text, root)
-
-    dsh_home = Path.home() / ".dsh"
-    patch = dsh_home / "cordis.patch.yml"
-    if patch.exists() and "pipa" not in patch.read_text()[:200]:
-        actions.append(f"~ kept existing {patch}")
-    else:
-        dsh_home.mkdir(parents=True, exist_ok=True)
-        if not patch.exists() or patch.read_text() != text:
-            patch.write_text(text)
-            actions.append(f"+ wrote {patch}")
-
-    creds = dsh_home / ".credentials.yaml"
-    if not creds.exists():
-        creds.write_text(
-            "version: 1\nrefs:\n"
-            f"  LITELLM_API_KEY: {config.LITELLM_KEY}\n"
-        )
-        actions.append(f"+ wrote {creds} (LITELLM_API_KEY ref)")
-    elif "LITELLM_API_KEY" not in creds.read_text():
-        actions.append(
-            f"~ add 'LITELLM_API_KEY: {config.LITELLM_KEY}' under refs in {creds}"
-        )
-    # dsh's credentials-local plugin hard-requires owner-only permissions;
-    # enforce on every wire so both fresh and pre-existing files comply.
-    if creds.exists() and (creds.stat().st_mode & 0o077):
-        creds.chmod(0o600)
-        actions.append(f"~ tightened {creds} -> 600")
-    return actions
 
 
 WIRERS = {
     "opencode": wire_opencode,
-    "deepseek-harness": wire_deepseek_harness,
 }
 
 

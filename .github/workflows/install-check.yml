@@ -45,30 +45,26 @@ jobs:
           export PATH="$HOME/.pipa-harness/bin:$PATH"
           pipa install uv litellm graphify
 
-      - name: Wire globals (dsh for the project runtime)
-        run: |
-          export PATH="$HOME/.pipa-harness/bin:$PATH"
-          pipa install dsh opencode
-
-      - name: Thin-project smoke (init in a fresh repo)
-        run: |
-          export PATH="$HOME/.pipa-harness/bin:$PATH"
-          proj="$RUNNER_TEMP/smoke-proj"
-          git init -q "$proj" && cd "$proj"
-          pipa init --runtime deepseek-harness
-          for f in AGENTS.md .pipa/runtime .pipa/AGENTS.md .pipa/rules .pipa/memory .pipa/state; do
-            test -e "$f" || { echo "missing after init: $f"; exit 1; }
-          done
-          # thin projects must NOT carry runtime configs or legacy extension dir
-          test ! -e .pipa/extension
-          test ! -e .pipa/deepseek-harness
-          test ! -e .pipa/opencode
-          # dsh globals wired for the selected runtime...
-          grep -q pipa "$HOME/.dsh/cordis.patch.yml"
-          # ...and switching runtimes wires the other side globally too
-          pipa runtime set opencode
-          grep -q pipa "$HOME/.config/opencode/opencode.jsonc"
-          pipa status
+        - name: Wire globals (opencode)
+          run: |
+            export PATH="$HOME/.pipa-harness/bin:$PATH"
+            pipa install opencode
+  
+        - name: Thin-project smoke (init in a fresh repo)
+          run: |
+            export PATH="$HOME/.pipa-harness/bin:$PATH"
+            proj="$RUNNER_TEMP/smoke-proj"
+            git init -q "$proj" && cd "$proj"
+            pipa init --runtime opencode
+            for f in AGENTS.md .pipa/runtime .pipa/AGENTS.md .pipa/rules .pipa/memory .pipa/state; do
+              test -e "$f" || { echo "missing after init: $f"; exit 1; }
+            done
+            # thin projects must NOT carry runtime configs or legacy extension dir
+            test ! -e .pipa/extension
+            test ! -e .pipa/opencode
+            # globals wired for the selected runtime...
+            grep -q pipa "$HOME/.config/opencode/opencode.jsonc"
+            pipa status
 
   tests:
     runs-on: ubuntu-latest

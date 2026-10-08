@@ -3,7 +3,7 @@
   <table>
     {% if columns is defined and columns %}
     <thead>
-      <tr>{% for col in columns %}<th>{{ col }}</th>{% endfor %}</tr>
+      <tr>{% for col in columns %}<th scope="col">{{ col }}</th>{% endfor %}</tr>
     </thead>
     {% endif %}
     <tbody>

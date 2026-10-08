@@ -1,0 +1,947 @@
+#!/usr/bin/env python3
+"""pipa-check — mechanical enforcement for the pipa harness.
+
+The harness map (AGENTS.md) lists rules under "Enforced, not remembered".
+That claim is only true if this script exists and runs. A rule documented as
+"enforced" but enforced by nothing is worse than an undocumented rule: it
+teaches the reader that verification happens, so nobody looks.
+
+Stdlib only. Optional: gitleaks, if installed.
+
+    pipa-check config        every model in opencode.jsonc exists in the gateway
+    pipa-check secrets       no secrets in the working tree / staged changes
+    pipa-check commit-msg    message <=72 chars, conventional-commit shape
+    pipa-check branch        not on a protected branch
+    pipa-check skills        every SKILL.md is named, placed, and triggered
+    pipa-check install-hooks wire the git hooks
+    pipa-check all           everything that applies here
+"""
+
+from __future__ import annotations
+
+import json
+import os
+import re
+import subprocess
+import sys
+import urllib.error
+import urllib.request
+from pathlib import Path
+
+HARNESS = Path(__file__).resolve().parent.parent
+CONFIG_CANDIDATES = [
+    Path.home() / ".config/opencode/opencode.jsonc",
+    Path.home() / ".config/opencode/opencode.json",
+]
+PROTECTED_BRANCHES = {"main", "master"}
+CONVENTIONAL = re.compile(
+    r"^(feat|fix|chore|docs|refactor|test|perf|build|ci|style|revert)(\([a-z0-9._/-]+\))?!?: .+"
+)
+SECRET_PATTERNS = [
+    (r"AKIA[0-9A-Z]{16}", "AWS access key id"),
+    (r"gh[pousr]_[A-Za-z0-9]{20,}", "GitHub token"),
+    (r"sk-(?!test|dummy|example|placeholder)[A-Za-z0-9][A-Za-z0-9_-]{19,}", "OpenAI-style secret key"),
+    (r"-----BEGIN [A-Z ]*PRIVATE KEY-----", "private key block"),
+    # Assignment of a *literal* string. Shell/JS interpolation ("${VAR:-x}") is
+    # wiring, not a secret, so require the value not to open with a substitution.
+    (r"(?i)\b(api[_-]?key|secret|password|passwd|token)\s*[:=]\s*[\"'](?!\$\{)(?!\$\()[^\"'\n]{12,}[\"']",
+     "hardcoded credential assignment"),
+]
+# Values that are unambiguously not live credentials. Stripped before matching so
+# test fixtures and vendor documentation examples do not block real commits.
+DUMMY_MARKERS = re.compile(
+    r"(?i)(example|placeholder|dummy|fake|notreal|not-real|test[-_]?only|"
+    r"top secret|changeme|your[-_]?|<[^>]+>|\.\.\.|xxx+|foo|bar|baz)"
+)
+SKIP_DIRS = {".git", "node_modules", "dist", "build", ".gradle", "venv", "__pycache__"}
+TEXT_SUFFIXES = {
+    ".py", ".ts", ".tsx", ".js", ".jsx", ".mjs", ".cjs", ".json", ".jsonc",
+    ".yaml", ".yml", ".toml", ".env", ".sh", ".md", ".kt", ".kts", ".java",
+    ".go", ".rs", ".rb", ".php", ".sql", ".tf", ".gradle",
+}
+
+RED, YEL, GRN, DIM, RST = "\033[31m", "\033[33m", "\033[32m", "\033[2m", "\033[0m"
+
+# Exit codes are three-valued on purpose. A check that cannot reach its
+# evidence has NOT verified its invariant, and reporting that as a pass is how
+# "every model in the picker is callable" stayed unenforced: the gateway was
+# down on every check run, each one printed "degraded, skipped", the rollup
+# printed PASSED, and exit was 0.
+EXIT_OK = 0
+EXIT_FAIL = 1
+EXIT_INCONCLUSIVE = 2
+
+
+def ok(msg: str) -> None:
+    print(f"{GRN}  ok{RST}  {msg}")
+
+
+def bad(msg: str) -> None:
+    print(f"{RED}FAIL{RST}  {msg}")
+
+
+def warn(msg: str) -> None:
+    print(f"{YEL}warn{RST}  {msg}")
+
+
+def unknown(msg: str) -> None:
+    """Unverifiable — distinct from both pass and fail."""
+    print(f"{YEL}  ??{RST}  {msg}")
+
+
+def info(msg: str) -> None:
+    print(f"{DIM}      {msg}{RST}")
+
+
+def head(title: str) -> None:
+    print(f"\n{title}\n{'-' * len(title)}")
+
+
+def strip_jsonc(text: str) -> str:
+    """Remove // comments and trailing commas, string-aware."""
+    out, i, n = [], 0, len(text)
+    in_str = esc = False
+    while i < n:
+        ch = text[i]
+        if in_str:
+            out.append(ch)
+            if esc:
+                esc = False
+            elif ch == "\\":
+                esc = True
+            elif ch == '"':
+                in_str = False
+            i += 1
+            continue
+        if ch == '"':
+            in_str = True
+            out.append(ch)
+            i += 1
+            continue
+        if text.startswith("//", i):
+            while i < n and text[i] != "\n":
+                i += 1
+            continue
+        if text.startswith("/*", i):
+            i += 2
+            while i < n and not text.startswith("*/", i):
+                i += 1
+            i += 2
+            continue
+        out.append(ch)
+        i += 1
+    cleaned = "".join(out)
+    return re.sub(r",(\s*[}\]])", r"\1", cleaned)
+
+
+def load_opencode_config() -> tuple[Path | None, dict | None]:
+    for path in CONFIG_CANDIDATES:
+        if not path.exists():
+            continue
+        try:
+            return path, json.loads(strip_jsonc(path.read_text(encoding="utf-8")))
+        except (OSError, json.JSONDecodeError) as exc:
+            bad(f"{path} is not parseable: {exc}")
+            return path, None
+    return None, None
+
+
+def gateway_models(cfg: dict) -> set[str] | None:
+    prov = (cfg.get("provider") or {}).get("litellm") or {}
+    opts = prov.get("options") or {}
+    base = (opts.get("baseURL") or "").rstrip("/")
+    if not base:
+        return None
+    req = urllib.request.Request(f"{base}/models")
+    key = opts.get("apiKey")
+    if key:
+        req.add_header("Authorization", f"Bearer {key}")
+    try:
+        with urllib.request.urlopen(req, timeout=5) as resp:
+            return {d["id"] for d in json.load(resp).get("data", [])}
+    except (urllib.error.URLError, OSError, ValueError, KeyError, TimeoutError) as exc:
+        warn(f"gateway unreachable ({exc}) — degraded, cannot verify models")
+        return None
+
+
+TIERS_FILE = HARNESS / "state" / "tier_assignments.json"
+VERIF_FILE = HARNESS / "state" / "model_verification.json"
+
+
+def record_verification(results: dict[str, tuple[bool, str]]) -> None:
+    """Persist live callability results so the dashboard can show them.
+
+    The Models page labels a model "active" when its API key is present, which
+    is not the same as the model working: a keyed model can still 401 on the
+    plan, 429 on an overloaded engine, or refuse proxy delivery. Writing the
+    probe results here lets the UI distinguish key-present from verified.
+    """
+    try:
+        import datetime
+
+        try:
+            prev = json.loads(VERIF_FILE.read_text())
+            if not isinstance(prev, dict):
+                prev = {}
+        except (OSError, json.JSONDecodeError):
+            prev = {}
+        prev["_checked_at"] = datetime.datetime.now(datetime.timezone.utc).strftime(
+            "%Y-%m-%dT%H:%M:%SZ"
+        )
+        for model, (ok, detail) in results.items():
+            prev[model] = {"ok": bool(ok), "detail": str(detail)[:200]}
+        VERIF_FILE.parent.mkdir(parents=True, exist_ok=True)
+        VERIF_FILE.write_text(json.dumps(prev, indent=2, sort_keys=True) + "\n")
+    except Exception as exc:  # noqa: BLE001 — recording must never fail a check
+        warn(f"could not record verification to {VERIF_FILE.name}: {exc}")
+
+
+def probe_model(cfg: dict, model_id: str) -> tuple[bool, str]:
+    """Actually call the model with a 1-token completion.
+
+    Presence in /v1/models is not callability. Some upstream providers reject
+    requests that arrive via a third-party proxy ("free tier can only be used
+    from within OpenCode"), and such models still appear in the catalog. Only a
+    real request distinguishes the two.
+    """
+    opts = ((cfg.get("provider") or {}).get("litellm") or {}).get("options") or {}
+    base = (opts.get("baseURL") or "").rstrip("/")
+    if not base:
+        return False, "no gateway baseURL configured"
+    body = json.dumps({
+        "model": model_id,
+        "messages": [{"role": "user", "content": "hi"}],
+        "max_tokens": 1,
+    }).encode()
+    req = urllib.request.Request(f"{base}/chat/completions", data=body,
+                                 headers={"Content-Type": "application/json"})
+    key = opts.get("apiKey")
+    if key:
+        req.add_header("Authorization", f"Bearer {key}")
+    try:
+        with urllib.request.urlopen(req, timeout=30) as resp:
+            json.load(resp)
+        return True, "callable"
+    except urllib.error.HTTPError as exc:
+        detail = ""
+        try:
+            detail = json.loads(exc.read()).get("error", {}).get("message", "")
+        except Exception:
+            detail = f"HTTP {exc.code}"
+        return False, detail[:110] or f"HTTP {exc.code}"
+    except (urllib.error.URLError, OSError, ValueError, TimeoutError) as exc:
+        return False, f"transport: {exc}"
+
+
+def check_tiers() -> int:
+    head("tiers — every assigned tier must be genuinely callable")
+    if not TIERS_FILE.exists():
+        warn(f"no {TIERS_FILE} (skipped)")
+        return 0
+    _, cfg = load_opencode_config()
+    if cfg is None:
+        bad("cannot read opencode.jsonc to find the gateway")
+        return 1
+    try:
+        tiers = json.loads(TIERS_FILE.read_text())
+    except (OSError, json.JSONDecodeError) as exc:
+        bad(f"{TIERS_FILE} does not parse: {exc}")
+        return 1
+
+    served = gateway_models(cfg)
+    if served is None:
+        unknown("gateway unreachable — tier callability UNVERIFIED")
+        info("start it (`pipa up`) and re-run; a check that cannot reach its")
+        info("evidence must not report as a pass.")
+        return EXIT_INCONCLUSIVE
+    failures = 0
+    for tier in sorted(tiers):
+        model = tiers[tier]
+        if served is not None and model not in served:
+            bad(f"tier {tier:8} -> {model}  (not in gateway catalog)")
+            failures += 1
+            continue
+        # (a) is the assigned model itself callable?
+        works, detail = probe_model(cfg, model)
+        if works:
+            ok(f"tier {tier:8} -> {model}  (assigned model callable)")
+        else:
+            bad(f"tier {tier:8} -> {model}  (assigned model NOT callable: {detail})")
+            failures += 1
+        # (b) is the RUNNING gateway's compiled alias in sync? The gateway keeps
+        # its own copy of the tier table (models/.effective.yaml). Probing only
+        # the json above would report green while live routing is still stale.
+        if served is not None and tier in served:
+            alias_ok, alias_detail = probe_model(cfg, tier)
+            if alias_ok:
+                ok(f"tier {tier:8} -> live alias routes successfully")
+            else:
+                bad(f"tier {tier:8} -> live alias is STALE or broken: {alias_detail}")
+                info("tier_assignments.json and models/.effective.yaml disagree.")
+                info("Do NOT regenerate yet: compose_litellm_config() skips any tier")
+                info("whose target is absent from state/model_catalog.json, so a")
+                info("stale cache would delete the alias instead of fixing it.")
+                info("Refresh discovery first, then regenerate, then re-run this.")
+                failures += 1
+        else:
+            warn(f"tier {tier:8} has no alias in the running gateway (not compiled in)")
+    return 1 if failures else 0
+
+
+def check_config() -> int:
+    head("config — declared models must resolve in the gateway")
+    path, cfg = load_opencode_config()
+    if cfg is None:
+        bad("no opencode.jsonc found, or it does not parse")
+        return 1
+
+    served = gateway_models(cfg)
+    if served is None:
+        unknown("gateway unreachable — declared models UNVERIFIED")
+        info("start it (`pipa up`) and re-run; a check that cannot reach its")
+        info("evidence must not report as a pass.")
+        return EXIT_INCONCLUSIVE
+    info(f"gateway serves {len(served)} models")
+
+    prov = ((cfg.get("provider") or {}).get("litellm") or {})
+    declared = set((prov.get("models") or {}).keys())
+    referenced = set()
+    for key in ("model", "small_model"):
+        value = cfg.get(key)
+        if not isinstance(value, str):
+            continue
+        # opencode format is "<provider>/<model-id>"; strip only the provider.
+        parts = value.split("/", 1)
+        referenced.add(parts[1] if len(parts) == 2 else parts[0])
+    for name in referenced:
+        declared.add(name)
+
+    failures = 0
+    # The defaults decide whether anything works at all, so they are checked
+    # for real callability, not just catalog presence.
+    for name in sorted(referenced):
+        if name not in served:
+            bad(f"default model '{name}' is not served by the gateway")
+            failures += 1
+            continue
+        works, detail = probe_model(cfg, name)
+        if works:
+            ok(f"default '{name}' resolves and is callable")
+        else:
+            bad(f"default model '{name}' resolves but is NOT callable: {detail}")
+            failures += 1
+
+    listed = sorted((prov.get("models") or {}).keys())
+    absent = [n for n in listed if n not in served]
+    if absent:
+        for name in absent:
+            bad(f"listed in the model picker but not served: '{name}'")
+            failures += 1
+    else:
+        info(f"all {len(listed)} listed model(s) are present in the catalog")
+        info("callability of the full list is not checked here — run: pipa-check models")
+
+    info(f"config: {path}")
+    return 1 if failures else 0
+
+
+def check_listed_models() -> int:
+    """Live-probe every model advertised in the opencode model picker.
+
+    Presence in the catalog is not callability. A model that is listed but
+    400s at call time is worse than an absent one: the user picks it, the
+    session dies, and the failure looks like the harness's fault.
+    """
+    head("models — every model in the picker must be genuinely callable")
+    _, cfg = load_opencode_config()
+    if cfg is None:
+        bad("cannot read opencode.jsonc")
+        return 1
+    prov = ((cfg.get("provider") or {}).get("litellm") or {})
+    listed = sorted((prov.get("models") or {}).keys())
+    if not listed:
+        warn("no models declared in the picker")
+        return 0
+
+    # An unreachable gateway makes every model look broken. That is a transport
+    # failure, not a model fact — recording it would poison the verification
+    # cache and tell the dashboard every model fails. But "don't poison the
+    # cache" is not a licence to report success: this invariant is UNVERIFIED.
+    if gateway_models(cfg) is None:
+        unknown(f"gateway unreachable — callability of {len(listed)} model(s) UNVERIFIED")
+        info("start it with: pipa up   (or)   litellm --config models/.effective.yaml --port 4000")
+        return EXIT_INCONCLUSIVE
+
+    info(f"probing {len(listed)} model(s) with a real 1-token request each")
+
+    failures, working = 0, []
+    results: dict[str, tuple[bool, str]] = {}
+    for name in listed:
+        works, detail = probe_model(cfg, name)
+        results[name] = (works, detail)
+        if works:
+            ok(f"{name}")
+            working.append(name)
+        else:
+            bad(f"{name}  NOT callable: {detail}")
+            failures += 1
+    record_verification(results)
+    print()
+    info(f"{len(working)}/{len(listed)} callable")
+    if failures:
+        info("Remove the failing entries from the picker in opencode.jsonc, or")
+        info("re-point them. A listed-but-broken model is a trap for the user.")
+    return 1 if failures else 0
+
+
+def scan_text(path: Path) -> list[tuple[str, int, str]]:
+    try:
+        lines = path.read_text(encoding="utf-8", errors="ignore").splitlines()
+    except OSError:
+        return []
+    hits = []
+    for lineno, line in enumerate(lines, 1):
+        if DUMMY_MARKERS.search(line):
+            continue
+        for pattern, label in SECRET_PATTERNS:
+            match = re.search(pattern, line)
+            if match and not DUMMY_MARKERS.search(match.group(0)):
+                hits.append((label, lineno, line.strip()[:100]))
+                break
+    return hits
+
+
+def check_secrets() -> int:
+    head("secrets — no credentials in tracked files")
+    if subprocess.run(["which", "gitleaks"], capture_output=True).returncode == 0:
+        proc = subprocess.run(
+            ["gitleaks", "detect", "--no-banner", "--redact", "--exit-code", "1"],
+            capture_output=True, text=True,
+        )
+        if proc.returncode == 0:
+            ok("gitleaks clean")
+            return 0
+        bad("gitleaks found secrets (see output above)")
+        return 1
+    warn("gitleaks not installed — using built-in pattern fallback")
+
+    root = Path.cwd()
+    findings, scanned = [], 0
+    for path in root.rglob("*"):
+        if any(part in SKIP_DIRS for part in path.parts):
+            continue
+        if not path.is_file() or path.suffix.lower() not in TEXT_SUFFIXES:
+            continue
+        scanned += 1
+        for label, lineno, snippet in scan_text(path):
+            rel = path.relative_to(root)
+            findings.append((label, f"{rel}:{lineno}", snippet))
+    info(f"scanned {scanned} files")
+
+    if not findings:
+        ok("no secret patterns found")
+        return 0
+    for label, where, snippet in findings[:20]:
+        bad(f"{label} at {where}")
+        info(snippet)
+    bad(f"{len(findings)} potential secret(s) — review before committing")
+    return 1
+
+
+def check_commit_msg(*args: str) -> int:
+    head("commit-msg — shape and length")
+    msg_file = args[0] if args else None
+    if not msg_file or not Path(msg_file).exists():
+        bad("no commit message file given")
+        return 1
+    msg = Path(msg_file).read_text(encoding="utf-8", errors="ignore").strip()
+    first = msg.splitlines()[0] if msg else ""
+
+    failures = 0
+    if not first:
+        bad("commit message is empty")
+        return 1
+    if len(first) > 72:
+        bad(f"subject line is {len(first)} chars (max 72)")
+        info(first)
+        failures += 1
+    else:
+        ok(f"subject line {len(first)} chars")
+    if not CONVENTIONAL.match(first):
+        bad("subject does not match 'type(scope): description'")
+        info(f"got:  {first}")
+        info(f"want: {CONVENTIONAL.pattern}")
+        failures += 1
+    else:
+        ok("conventional-commit shape")
+    return 1 if failures else 0
+
+
+def current_branch() -> str | None:
+    try:
+        return subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            capture_output=True, text=True, timeout=5,
+        ).stdout.strip() or None
+    except (subprocess.SubprocessError, FileNotFoundError):
+        return None
+
+
+def check_branch() -> int:
+    head("branch — protected branches take no new commits")
+    branch = current_branch()
+    if branch is None:
+        warn("not a git repository (skipping)")
+        return 0
+    if branch in PROTECTED_BRANCHES:
+        bad(f"on '{branch}' — use feat/*, fix/*, or chore/*")
+        return 1
+    ok(f"on '{branch}'")
+    return 0
+
+
+HOOK_NAMES = ("pre-commit", "commit-msg", "pre-push")
+HOOK_BODIES = {
+    "pre-commit": 'exec "{check}" secrets\n',
+    "commit-msg": 'exec "{check}" commit-msg "$1"\n',
+    "pre-push": 'exec "{check}" branch\n',
+}
+
+
+def install_hooks(repo: Path | None = None) -> int:
+    head("install-hooks — wire mechanical checks into git")
+    repo = repo or Path.cwd()
+    hooks_dir = repo / ".git" / "hooks"
+    if not hooks_dir.is_dir():
+        bad(f"{repo} is not a git repository")
+        return 1
+    check = Path(__file__).resolve()
+    for name in HOOK_NAMES:
+        target = hooks_dir / name
+        if target.exists():
+            warn(f"{name} already exists — left untouched")
+            continue
+        body = "#!/bin/sh\n" + HOOK_BODIES[name].format(check=check)
+        target.write_text(body)
+        target.chmod(0o755)
+        ok(f"installed .git/hooks/{name}")
+    info(f"hooks call: {check}")
+    info("CI still required for shared enforcement; hooks are local only")
+    info("bypass once with: git commit --no-verify")
+    return 0
+
+
+def check_deadcode() -> int:
+    """Dead code is a defect class, not a style preference — gate it.
+
+    A 10 -> 5 nav merge once removed the nav links and left every old route
+    behind: five page modules, four templates with no renderer, twelve
+    endpoints nothing called. It survived because `tests/test_dashboard.py`
+    pinned the redirects, so a green suite protected the residue. This checks
+    the shape instead of any single symbol:
+
+      1. a dashboard template with no renderer
+      2. a page module whose every route is an unconditional redirect
+      3. a public dashboard/data function with no caller anywhere
+    """
+    head("deadcode — no unreachable dashboard surface")
+    failures = 0
+    dash = HARNESS / "dashboard"
+    if not dash.is_dir():
+        warn("no dashboard/ directory (skipped)")
+        return EXIT_OK
+
+    # (1) templates nothing renders.
+    templates = {p.stem for p in (dash / "templates").glob("*.html")}
+    rendered: set[str] = set()
+    for py in dash.rglob("*.py"):
+        text = py.read_text(errors="replace")
+        rendered.update(re.findall(r'render\(\s*request,\s*["\']([\w./-]+)["\']', text))
+        rendered.update(re.findall(r'["\']([\w./-]+\.html)["\']', text))
+    # {% extends "base.html" %} / {% include "_entry_table.html" %} live in
+    # the templates themselves — a template rendered only by another template
+    # is still reachable.
+    for tpl in (dash / "templates").glob("*.html"):
+        text = tpl.read_text(errors="replace")
+        rendered.update(
+            re.findall(r'(?:extends|include|import)\s+["\']([\w./-]+)["\']', text)
+        )
+    # Compare stems: rendered entries may be bare names or include .html.
+    rendered_stems = {r[:-5] if r.endswith(".html") else r for r in rendered}
+    orphans = sorted(t for t in templates if t not in rendered_stems)
+    for t in orphans:
+        bad(f"templates/{t}.html has no renderer")
+        failures += 1
+    if not orphans:
+        ok(f"{len(templates)} templates, all reachable")
+
+    # (2) page modules that are pure redirect shims — belongs in pages/compat.py.
+    import ast
+
+    shims = []
+    for py in sorted((dash / "pages").glob("*.py")):
+        if py.name.startswith("_") or py.name == "compat.py":
+            continue
+        text = py.read_text()
+        try:
+            tree = ast.parse(text)
+        except SyntaxError:
+            continue
+        routes = []
+        for node in ast.walk(tree):
+            if not isinstance(node, (ast.FunctionDef, ast.AsyncFunctionDef)):
+                continue
+            for dec in node.decorator_list:
+                # @router.get(...) / @router.post(...) and bare @get(...)
+                attr = getattr(dec, "attr", None)
+                if attr in ("get", "post", "put", "delete", "patch"):
+                    routes.append(node)
+                    break
+                if isinstance(dec, ast.Call) and getattr(
+                    getattr(dec.func, "attr", None), "__str__", lambda: ""
+                )() in ("get", "post", "put", "delete"):
+                    routes.append(node)
+                    break
+        if not routes:
+            continue
+        segments = [ast.get_source_segment(text, n) or "" for n in routes]
+        if all("RedirectResponse" in s for s in segments):
+            shims.append(py.name)
+    for name in shims:
+        bad(f"pages/{name} is a pure redirect shim — move it to pages/compat.py")
+        failures += 1
+    if not shims:
+        ok("no stray redirect-only page modules")
+
+    # (3) unreferenced public helpers in dashboard/data.
+    data_dir = dash / "data"
+    corpus = "\n".join(
+        p.read_text(errors="replace")
+        for p in list(HARNESS.rglob("*.py")) + list(HARNESS.rglob("*.js"))
+        + list(HARNESS.rglob("*.html"))
+        if "__pycache__" not in p.parts
+    )
+    unused = []
+    for py in sorted(data_dir.glob("*.py")):
+        if py.name == "__init__.py":
+            continue
+        tree = ast.parse(py.read_text())
+        for node in tree.body:
+            if not isinstance(node, ast.FunctionDef) or node.name.startswith("_"):
+                continue
+            uses = len(re.findall(rf"\b{re.escape(node.name)}\b", corpus))
+            if uses <= 1:  # the definition itself
+                unused.append(f"data/{py.name}::{node.name}")
+    for name in unused:
+        warn(f"{name} has no caller (public helper, unreferenced)")
+    if not unused:
+        ok("every public data/ helper is called")
+
+    # (4) context a page computes but its template never reads.
+    #     Jinja renders an undefined variable as empty string, so this is
+    #     invisible: the work is done and thrown away. Four such values were
+    #     being passed while the pages looked correct.
+    import ast as _ast
+
+    def _jinja_usage(dash, tpl_name, seen=None):
+        """Everything a template (and its fragments) can read.
+
+        A context variable counts as used if it appears in ANY Jinja markup:
+        `{{ ... }}` output, or a `{% ... %}` tag — `{% for s in mcp_servers %}`
+        is the normal way a collection is consumed, and stripping block tags
+        (as an earlier version did) flags every list the templates actually
+        render.
+
+        `{% include "frag" %}` passes the caller's context into the fragment,
+        so the fragment's markup counts too. Without that, extracting a shared
+        panel into a fragment makes every variable it reads look dead in both
+        callers.
+        """
+        seen = seen if seen is not None else set()
+        if tpl_name in seen:
+            return ""
+        seen.add(tpl_name)
+        # An include name already carries the extension: `{% include
+        # "usage_panels.html" %}`. Appending another .html looked for
+        # usage_panels.html.html, found nothing, and made every variable the
+        # fragment reads look dead in the calling page.
+        stem = tpl_name[:-5] if tpl_name.endswith(".html") else tpl_name
+        for base in ("templates", "fragments"):
+            tpl = dash / base / (stem + ".html")
+            if not tpl.is_file():
+                continue
+            text = re.sub(r"\{#.*?#\}", "", tpl.read_text(), flags=re.S)
+            # Includes must be read BEFORE strings are stripped — the fragment
+            # name lives in a quoted argument.
+            includes = re.findall(r"\{%\s*include\s+[\"']([\w./-]+)[\"']", text)
+            markup = " ".join(re.findall(r"\{\{(.*?)\}\}", text, flags=re.S))
+            markup += " " + " ".join(
+                re.findall(r"\{%(.*?)%\}", text, flags=re.S)
+            )
+            # Then drop string literals. A context variable is referenced as a
+            # bare identifier and never inside a quoted string, but prose
+            # lives there: `{% with message='No notes in this scope yet.' %}`
+            # made a genuinely-used `notes` look dead, and
+            # `{% with label='Sessions', value=usage.sessions %}` would hide a
+            # real one.
+            markup = re.sub(r"'[^']*'", " ", markup)
+            markup = re.sub(r'"[^"]*"', " ", markup)
+            for frag in includes:
+                markup += " " + _jinja_usage(dash, frag, seen)
+            return markup
+        return ""
+
+    dead_ctx = []
+    for py in sorted((dash / "pages").glob("*.py")):
+        text = py.read_text()
+        try:
+            tree = _ast.parse(text)
+        except SyntaxError:
+            continue
+        for node in _ast.walk(tree):
+            if not isinstance(node, _ast.Call):
+                continue
+            fn = node.func
+            if not (isinstance(fn, _ast.Name) and fn.id == "render"):
+                continue
+            # The template is the first POSITIONAL arg after `request`, e.g.
+            # render(request, "knowledge.html", groups=...). An earlier
+            # version looked for templates/<kwarg>.html, which never exists,
+            # so every branch hit `continue` and the check silently passed.
+            tpl_name = ""
+            for arg in node.args[1:]:
+                if isinstance(arg, _ast.Constant) and isinstance(arg.value, str):
+                    tpl_name = arg.value
+                    break
+            if not tpl_name or not (dash / "templates" / tpl_name).is_file():
+                continue
+            used = _jinja_usage(dash, tpl_name)
+            for kw in node.keywords:
+                tname = kw.arg
+                if not tname or tname == "request":
+                    continue
+                if not re.search(rf"\b{re.escape(tname)}\b", used):
+                    dead_ctx.append(f"{py.name} -> {tname}")
+    for name in dead_ctx:
+        bad(f"pages/{name}: page context the template never reads")
+        failures += 1
+    if not dead_ctx:
+        ok("every rendered context value is used by its template")
+
+    # (5) stylesheets linked from a template that do not exist.
+    css_dir = dash / "static" / "css"
+    dead_css = []
+    for html in sorted((dash / "templates").glob("*.html")):
+        for m in re.findall(r'href="/static/(css/[\w./-]+\.css)"', html.read_text()):
+            if not (dash / "static" / m).is_file():
+                dead_css.append(f"{html.name} -> {m}")
+    for name in dead_css:
+        bad(f"templates/{name}: links a stylesheet that does not exist (404)")
+        failures += 1
+    if not dead_css:
+        ok("no template links a missing stylesheet")
+
+    return EXIT_FAIL if failures else EXIT_OK
+
+
+def check_dashboard_security() -> int:
+    """The dashboard must refuse commands that did not come from itself.
+
+    The dashboard rewrites AGENTS.md, writes provider API keys, recomposes the
+    gateway config and shells out to `pipa install`. It has no accounts and no
+    cookies, so "reached the socket" was the whole trust boundary — which means
+    any page the user had open could drive it. The guard proves same-origin and
+    loopback-Host; this check makes sure the guard is still wired to the app.
+
+    Structural, not behavioural: the tests drive real requests. This catches the
+    case where someone rebuilds the app and forgets the middleware.
+    """
+    head("dashboard — local writes must be same-origin only")
+    dash = HARNESS / "dashboard"
+    if not dash.is_dir():
+        warn("no dashboard/ directory (skipped)")
+        return EXIT_OK
+    failures = 0
+
+    security = dash / "pages" / "security.py"
+    server = dash / "server.py"
+    if not security.is_file():
+        bad("dashboard/pages/security.py is missing — no same-origin guard")
+        failures += 1
+    else:
+        src = security.read_text()
+        for needed, why in (
+            ("sec-fetch-site", "browser-enforced origin signal"),
+            ("origin", "Origin header check"),
+            ("loopback", "DNS-rebinding guard"),
+        ):
+            if needed not in src.lower():
+                bad(f"security.py has no {needed} check ({why})")
+                failures += 1
+        if "Content-Security-Policy" not in src:
+            bad("security.py sets no Content-Security-Policy")
+            failures += 1
+
+    if not server.is_file():
+        bad("dashboard/server.py is missing")
+        failures += 1
+    else:
+        ssrc = server.read_text()
+        if "same_origin_guard" not in ssrc:
+            bad("server.py never installs the same-origin guard middleware")
+            failures += 1
+        if ssrc.count("FastAPI(") > 1:
+            bad("server.py builds more than one app — a second would skip the middleware")
+            failures += 1
+
+    # A guard that only covers POST is half a guard.
+    if security.is_file() and server.is_file():
+        if "PUT" not in security.read_text() and "SAFE_METHODS" not in security.read_text():
+            bad("security.py does not enumerate safe methods — PUT/DELETE may be unguarded")
+            failures += 1
+
+    if not failures:
+        ok("same-origin + loopback guard wired, CSP set")
+    return EXIT_FAIL if failures else EXIT_OK
+
+
+SKILL_ROOTS = ("skills", "skills-optional")
+SKILL_NAME_RE = re.compile(r"^[a-z0-9]+(-[a-z0-9]+)*$")
+SKILL_DESC_MAX = 1024
+SKILL_LINES_MAX = 500
+
+
+def _skill_frontmatter(text: str) -> dict | None:
+    """Flat `key: value` frontmatter — the subset skills use."""
+    if not text.startswith("---\n"):
+        return None
+    end = text.find("\n---", 3)
+    if end == -1:
+        return None
+    out: dict = {}
+    for line in text[4:end].splitlines():
+        if not line.strip() or line.startswith((" ", "\t", "#")) or ":" not in line:
+            continue
+        key, _, value = line.partition(":")
+        out[key.strip()] = value.strip().strip("'\"")
+    return out
+
+
+def check_skills(root_arg: str | None = None) -> int:
+    """Every skill must be discoverable: named, placed, and triggered.
+
+    A skill the agent never loads is documentation, not enforcement. The
+    loader matches on the directory name and the agent decides to load from
+    the description alone — so a missing `name`, a mismatched directory, or a
+    description with no trigger words silently disables the skill. The
+    agentskills.io spec supplies the limits (name <=64 chars, description
+    <=1024); this check supplies the gate. A body over 500 lines is a warning:
+    the spec recommends progressive disclosure, not an every-session tax.
+    """
+    head("skills — every SKILL.md must be discoverable")
+    base = Path(root_arg) if root_arg else HARNESS
+    failures = 0
+    found = 0
+    for rootname in SKILL_ROOTS:
+        rootdir = base / rootname
+        if not rootdir.is_dir():
+            continue
+        for skill_dir in sorted(p for p in rootdir.iterdir() if p.is_dir()):
+            found += 1
+            rel = skill_dir.relative_to(base)
+            skill_md = skill_dir / "SKILL.md"
+            if not skill_md.is_file():
+                bad(f"{rel}/ has no SKILL.md")
+                failures += 1
+                continue
+            text = skill_md.read_text(encoding="utf-8", errors="replace")
+            fm = _skill_frontmatter(text)
+            if fm is None:
+                bad(f"{rel}/SKILL.md has no YAML frontmatter")
+                failures += 1
+                continue
+
+            name = fm.get("name", "")
+            if not name:
+                bad(f"{rel}/SKILL.md: missing `name`")
+                failures += 1
+            elif name != skill_dir.name:
+                bad(f"{rel}/SKILL.md: name {name!r} != directory {skill_dir.name!r}")
+                failures += 1
+            elif not SKILL_NAME_RE.match(name) or len(name) > 64:
+                bad(f"{rel}/SKILL.md: name {name!r} must be [a-z0-9-], <=64 chars")
+                failures += 1
+
+            desc = fm.get("description", "")
+            if not desc:
+                bad(f"{rel}/SKILL.md: missing `description` — the only thing "
+                    f"the agent reads to decide to load the skill")
+                failures += 1
+            elif len(desc) > SKILL_DESC_MAX:
+                bad(f"{rel}/SKILL.md: description is {len(desc)} chars "
+                    f"(max {SKILL_DESC_MAX})")
+                failures += 1
+            elif not (re.search(r"\bTriggers:", desc)
+                      or desc.startswith(("Use ", "You MUST use"))):
+                bad(f"{rel}/SKILL.md: description has no trigger words — say when "
+                    f"to use it (`Use when ...` or `Triggers: <symptoms, synonyms, errors>`)")
+                failures += 1
+
+            lines = text.count("\n") + 1
+            if lines > SKILL_LINES_MAX:
+                warn(f"{rel}/SKILL.md is {lines} lines — keep the body under "
+                     f"{SKILL_LINES_MAX} (progressive disclosure)")
+
+    if not found:
+        warn(f"no skills/ or skills-optional/ under {base} (skipped)")
+        return EXIT_OK
+    if not failures:
+        ok(f"{found} skill(s) named, placed, and triggered")
+    return EXIT_FAIL if failures else EXIT_OK
+
+
+def main() -> int:
+    cmd = sys.argv[1] if len(sys.argv) > 1 else "all"
+    checks = {
+        "config": check_config,
+        "models": check_listed_models,
+        "tiers": check_tiers,
+        "secrets": check_secrets,
+        "deadcode": check_deadcode,
+        "dashboard": check_dashboard_security,
+        "skills": check_skills,
+        "commit-msg": check_commit_msg,
+        "branch": check_branch,
+        "install-hooks": install_hooks,
+    }
+    if cmd == "all":
+        # Repo health only. `branch` is a push-time gate, not a health signal --
+        # including it here would make `all` permanently red on main and train
+        # the reader to ignore red output.
+        #
+        # Three-valued rollup: a real failure outranks an unverifiable check,
+        # but "nothing failed" is not "everything passed". Only an all-green
+        # run may claim PASSED.
+        results = [check_config(), check_tiers(), check_secrets(),
+                   check_deadcode(), check_dashboard_security(),
+                   check_skills()]
+        head("summary")
+        if any(r == EXIT_FAIL for r in results):
+            print(f"{RED}FAILED{RST} — at least one invariant is violated")
+            return EXIT_FAIL
+        if any(r == EXIT_INCONCLUSIVE for r in results):
+            print(f"{YEL}INCONCLUSIVE{RST} — no violation found, but at least one "
+                  f"invariant could not be verified")
+            print(f"{DIM}      start the gateway (`pipa up`) and re-run before "
+                  f"trusting this{RST}")
+            return EXIT_INCONCLUSIVE
+        print(f"{GRN}PASSED{RST}")
+        return EXIT_OK
+    if cmd not in checks:
+        print(f"usage: pipa-check {{{'|'.join([*checks, 'all'])}}}")
+        return 2
+    return checks[cmd](*sys.argv[2:])
+
+
+if __name__ == "__main__":
+    sys.exit(main())

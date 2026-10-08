@@ -1,7 +1,6 @@
-"""Status page: stat cards, service checks, env keys, projects, MCP."""
+"""Status page: health grid, env keys, projects, MCP."""
 from __future__ import annotations
 
-from datetime import date
 from urllib.parse import quote
 
 from fastapi import APIRouter, Request
@@ -9,10 +8,10 @@ from fastapi.responses import RedirectResponse
 
 from pipa.runtime import RUNTIMES
 
-from data import gateway, mcp as mcp_data, models as models_data
+from data import mcp as mcp_data
 from data import projects as projects_data
 from data import services as services_data
-from data import sessions as session_data, spend as spend_data, system
+from data import system
 from . import form_fields, render
 
 router = APIRouter()
@@ -20,61 +19,32 @@ router = APIRouter()
 
 @router.get("/api/health")
 def health():
-    """Lightweight probe for the sidebar status pill."""
+    """Lightweight probe for the sidebar status pill.
+
+    Reads the same owned check list as /api/status instead of looking rows up by
+    lowercased name. It used to match on the literal string "litellm gateway",
+    so any rename of that subsystem silently reported False for both services
+    rather than failing loudly.
+    """
     try:
-        cks = {c["name"].lower(): bool(c["ok"]) for c in system.checks()}
+        rows = system.checks()
     except Exception:
-        cks = {}
+        rows = []
+    by_name = {r["name"]: r for r in rows}
     return {
-        "gateway": cks.get("litellm gateway", False),
-        "ollama": cks.get("ollama", False),
+        "gateway": bool(by_name.get("litellm gateway", {}).get("ok")),
+        "ollama": bool(by_name.get("ollama", {}).get("ok")),
     }
 
 
 @router.get("/")
 def overview(request: Request, flash: str = "", ok: str = ""):
-    models = gateway.list_models()
-
-    sessions_all = session_data.all_sessions()
-    today = date.today().isoformat()
-    sessions_today = sum(
-        1 for s in sessions_all if str(s.get("start") or "").startswith(today)
-    )
-
-    spend_summary = spend_data.summary()
-
-    checks = system.checks()
-    updown = system.up_down(checks)
+    # Only what overview.html actually renders. It used to also build `cards`,
+    # `checks`, `gateway_up`, `ollama_up` and `env_keys` — five values Jinja
+    # silently dropped (Undefined renders as empty), two of which cost an HTTP
+    # probe to the gateway and ollama on every single page load. The status
+    # grid and the key chips are JS-driven from /api/status and /api/env-keys.
     project = system.project_info()
-
-    env_keys = models_data.env_keys()
-
-    def _check_ok(name: str) -> bool:
-        row = next((c for c in checks if c["name"] == name), None)
-        return bool(row and row["ok"])
-
-    cards = [
-        {
-            "label": "Gateway models",
-            "value": len(models),
-            "detail": f"{len(models)} aliases served" if models else "gateway down or empty",
-        },
-        {
-            "label": "Sessions today",
-            "value": sessions_today,
-            "detail": f"{len(sessions_all)} total recorded",
-        },
-        {
-            "label": "Spend (all time)",
-            "value": f"${spend_summary['cost_usd']:.4f}",
-            "detail": f"{spend_summary['rows']} calls",
-        },
-        {
-            "label": "Services",
-            "value": f"{updown['up']}/{updown['total']}",
-            "detail": "up / checked",
-        },
-    ]
 
     # Projects + MCP for the folded sections
     try:
@@ -89,12 +59,7 @@ def overview(request: Request, flash: str = "", ok: str = ""):
     return render(
         request,
         "overview.html",
-        cards=cards,
-        checks=checks,
         project=project,
-        env_keys=env_keys,
-        gateway_up=_check_ok("litellm gateway"),
-        ollama_up=_check_ok("ollama"),
         projects=projects,
         runtimes=list(RUNTIMES),
         mcp_servers=mcp_servers,
@@ -121,16 +86,25 @@ def start_ollama(request: Request):
 
 @router.post("/projects/runtime")
 async def set_project_runtime(request: Request):
+    """Single owner of the project-runtime switch.
+
+    Reads BOTH historical field names: the current form posts "project", the
+    retired pages/projects.py form posted "path". That module was shadowed by
+    this one (server.py includes routers alphabetically) while reading the
+    other name, so it would have failed closed on a blank path the moment
+    ordering changed — silently, because its caller discarded the verdict.
+    Also honours the (ok, msg) the data layer actually returns, rather than
+    reporting success unconditionally.
+    """
     fields = await form_fields(request)
-    project = str(fields.get("project", ""))
-    runtime = str(fields.get("runtime", ""))
+    project = str(fields.get("project") or fields.get("path") or "")
+    runtime = str(fields.get("runtime") or "")
     try:
-        projects_data.set_runtime(project, runtime)
-        ok, msg = True, f"runtime set to {runtime}"
-    except Exception as exc:
-        ok, msg = False, str(exc)[:300]
+        ok, msg = projects_data.set_runtime(project, runtime)
+    except Exception as exc:  # noqa: BLE001
+        ok, msg = False, f"{type(exc).__name__}: {exc}"[:300]
     return RedirectResponse(
-        f"/?flash={quote(msg)}&ok={'1' if ok else '0'}", status_code=303
+        f"/?flash={quote(msg[:300])}&ok={'1' if ok else '0'}", status_code=303
     )
 
 

@@ -9,7 +9,7 @@ Thin per-project layout (everything else lives in the global install):
   project/
   ├── AGENTS.md              ← symlink → .pipa/AGENTS.md (project facts only)
   └── .pipa/
-      ├── runtime            ← "opencode" | "deepseek-harness"
+      ├── runtime            ← "opencode"
       ├── AGENTS.md          ← real file: name, build/test cmds, quirks
       ├── rules/*.md         ← project context (HARD/SOFT rules)
       ├── memory/            ← decisions/ research/ notes (as_of/valid_until)
@@ -181,7 +181,12 @@ def init_project(
     actions: list[str] = []
 
     if not (target / ".git").exists() and not config.git_root(target):
-        raise ScaffoldError(f"{target} is not a git repo")
+        raise ScaffoldError(
+            f"{target} is not inside a git repository.\n"
+            f"       The harness anchors memory and rules to the repo, so init "
+            f"needs one.\n"
+            f"       Fix:  cd {target} && git init  (then re-run: pipa init)"
+        )
 
     name = runtimes.resolve(runtime_name)
     actions.append(f"runtime: {name}")
@@ -230,7 +235,7 @@ def init_project(
     elif not agents_link.is_symlink():
         actions.append("~ AGENTS.md exists (not a symlink, leaving untouched)")
 
-    # 4. Runtime wiring is machine-global now (writes ~/.config, ~/.dsh)
+    # 4. Runtime wiring is machine-global now (writes ~/.config)
     actions.extend(runtimes.wire(name, target, root))
 
     # 4b. Per-project agents: expose .pipa/agents-local to opencode's
@@ -309,7 +314,6 @@ def migrate_to_thin(target: Path, root: Path | None = None) -> list[str]:
 
     # Generated runtime configs are obsolete (wiring is global now)
     shutil.rmtree(pipa_dir / "opencode", ignore_errors=True)
-    shutil.rmtree(pipa_dir / "deepseek-harness", ignore_errors=True)
     stale_oc = target / ".opencode"
     if stale_oc.is_symlink():
         stale_oc.unlink()
@@ -413,7 +417,4 @@ def check_extension(target: Path) -> list[tuple[bool, str]]:
         checks.append((ok, "opencode global config wired"))
         plugin = home / ".config" / "opencode" / "plugin" / "pipa-session-bus.js"
         checks.append((plugin.is_file(), "session bus plugin wired"))
-    elif name == "deepseek-harness":
-        cfg = home / ".dsh" / "cordis.patch.yml"
-        checks.append((cfg.exists(), "~/.dsh/cordis.patch.yml wired"))
     return checks

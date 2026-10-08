@@ -57,7 +57,7 @@ def knowledge_view(request: Request, scope: str = "global", tab: str = "memory",
     return render(
         request, "knowledge.html",
         tab=tab, scope=scope, projects=projects, proj=proj,
-        notes=notes, groups=_grouped(notes),
+        groups=_grouped(notes),
         q=query, hits=hits, searched=searched, recall_error=recall_error,
         expired_count=expired_count,
         g_status=g_status, gq=(gq or "").strip(), g_result=g_result,

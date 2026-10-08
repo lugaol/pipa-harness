@@ -1,6 +1,6 @@
 {% if entries %}
 <table>
-  <thead><tr><th>title</th><th>path</th><th>size</th><th>modified</th><th>actions</th></tr></thead>
+  <thead><tr><th scope="col">title</th><th scope="col">path</th><th scope="col">size</th><th scope="col">modified</th><th scope="col">actions</th></tr></thead>
   <tbody>
     {% for e in entries %}
     <tr>
@@ -11,7 +11,7 @@
       <td class="nowrap">
         <a href="/context/edit?tier={{ tier }}&amp;tab={{ tab }}&amp;path={{ e.path_rel }}">Edit</a>
         <form method="post" action="/context/delete" class="inline-form"
-              onsubmit="return confirm('Delete {{ e.path_rel }}?')">
+              data-confirm="Delete {{ e.path_rel }}?">
           <input type="hidden" name="tier" value="{{ tier }}">
           <input type="hidden" name="tab" value="{{ tab }}">
           <input type="hidden" name="path" value="{{ e.path_rel }}">

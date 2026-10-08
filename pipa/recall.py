@@ -41,15 +41,12 @@ _TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 _AS_OF_RE = re.compile(r"as_of:\s*(\S+)")
 _VALID_UNTIL_RE = re.compile(r"valid_until:\s*(\S+)")
 
-
 def _tokens(text: str) -> set[str]:
     return set(_TOKEN_RE.findall(text.lower()))
-
 
 def _clip(text: str, n: int = DETAIL_MAX) -> str:
     collapsed = " ".join(text.split())
     return collapsed[:n]
-
 
 def _snippet(text: str, toks: set[str], n: int = DETAIL_MAX) -> str:
     """A <=n-char window of text around the first token match."""
@@ -64,7 +61,6 @@ def _snippet(text: str, toks: set[str], n: int = DETAIL_MAX) -> str:
     suffix = "\u2026" if end < len(collapsed) else ""
     return prefix + collapsed[start:end] + suffix
 
-
 def _meta_dates(content: str) -> tuple[str | None, str | None]:
     as_of = _AS_OF_RE.search(content)
     valid_until = _VALID_UNTIL_RE.search(content)
@@ -72,7 +68,6 @@ def _meta_dates(content: str) -> tuple[str | None, str | None]:
         as_of.group(1) if as_of else None,
         valid_until.group(1) if valid_until else None,
     )
-
 
 def _parse_iso(raw: str | None) -> date | None:
     if not raw:
@@ -85,11 +80,9 @@ def _parse_iso(raw: str | None) -> date | None:
     except ValueError:
         return None
 
-
 def _is_expired(valid_until_raw: str | None) -> bool:
     d = _parse_iso(valid_until_raw)
     return bool(d and d < date.today())
-
 
 def _hit(source: str, title: str, detail: str, path: str | None,
          score: float, as_of: str | None, valid_until: str | None) -> dict:
@@ -104,7 +97,6 @@ def _hit(source: str, title: str, detail: str, path: str | None,
         "expired": _is_expired(valid_until),
     }
 
-
 def _match_score(toks: set[str], *fields_weight_pairs: tuple[str, float]) -> float:
     """Sum weight per query token appearing as a substring of the field."""
     score = 0.0
@@ -117,7 +109,6 @@ def _match_score(toks: set[str], *fields_weight_pairs: tuple[str, float]) -> flo
                 score += weight
     return score
 
-
 def _memory_db_path(project: Path | None) -> Path | None:
     candidates = []
     if project:
@@ -127,7 +118,6 @@ def _memory_db_path(project: Path | None) -> Path | None:
         if c.exists():
             return c
     return None
-
 
 def _recall_memory_db(toks: set[str], project: Path | None) -> tuple[bool, list[dict]]:
     db = _memory_db_path(project)
@@ -176,7 +166,6 @@ def _recall_memory_db(toks: set[str], project: Path | None) -> tuple[bool, list[
         conn.close()
     return True, hits
 
-
 def _vault_dirs(project: Path | None) -> list[Path]:
     dirs = []
     if project:
@@ -192,7 +181,6 @@ def _vault_dirs(project: Path | None) -> list[Path]:
             seen.add(r)
             unique.append(d)
     return unique
-
 
 def _recall_vault(toks: set[str], project: Path | None) -> tuple[bool, list[dict]]:
     dirs = _vault_dirs(project)
@@ -239,12 +227,10 @@ def _recall_vault(toks: set[str], project: Path | None) -> tuple[bool, list[dict
             ))
     return True, hits
 
-
 _GRAPH_LIST_KEYS = ("nodes", "entities", "vertices", "items", "elements")
 _NODE_NAME_KEYS = ("name", "label", "id", "title")
 _NODE_TYPE_KEYS = ("type", "kind", "category")
 _NODE_PATH_KEYS = ("path", "file", "filepath")
-
 
 def _load_graph_data(project: Path | None):
     roots = []
@@ -263,7 +249,6 @@ def _load_graph_data(project: Path | None):
             return data
     return None
 
-
 def _graph_nodes(data) -> list:
     if isinstance(data, list):
         return data
@@ -277,14 +262,12 @@ def _graph_nodes(data) -> list:
                 return val
     return []
 
-
 def _node_field(node, keys) -> str | None:
     for k in keys:
         val = node.get(k)
         if isinstance(val, (str, int, float)) and str(val).strip():
             return str(val).strip()
     return None
-
 
 def _recall_graph(toks: set[str], project: Path | None) -> tuple[bool, list[dict]]:
     data = _load_graph_data(project)
@@ -319,7 +302,6 @@ def _recall_graph(toks: set[str], project: Path | None) -> tuple[bool, list[dict
             None,
         ))
     return True, hits
-
 
 def recall(query: str, project: Path | None = None, limit: int = 8) -> dict:
     """Query all memory stores at once and return fused, ranked hits.
@@ -358,10 +340,7 @@ def recall(query: str, project: Path | None = None, limit: int = 8) -> dict:
     out["results"] = hits[: max(0, limit)]
     return out
 
-
 STALE_TOUCH_DAYS = 180
-STALE_BUDGETS = (("vault", 100), ("project", 150))
-
 
 def stale_report(project: Path | None = None,
                  touch_days: int = STALE_TOUCH_DAYS) -> list[dict]:
@@ -381,7 +360,8 @@ def stale_report(project: Path | None = None,
         if not d.is_dir():
             continue
         harness_vault = d.resolve() == config.harness_root().resolve() / "vault"
-        budget = 100 if harness_vault else 150
+        from pipa.memory_gc import PROJECT_MEMORY_BUDGET, VAULT_BUDGET
+        budget = VAULT_BUDGET if harness_vault else PROJECT_MEMORY_BUDGET
         for md in sorted(d.rglob("*.md")):
             try:
                 real = md.resolve()

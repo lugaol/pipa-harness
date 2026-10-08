@@ -13,7 +13,7 @@ from pipa.model_registry import TIER_ALIASES, normalize_tier
 from data import envkeys as envkeys_data
 from data import models as models_data
 from data import system as system_data
-from pages.api_common import _catalog, _verify_effective
+from pages.api_common import _catalog
 
 router = APIRouter()
 
@@ -22,11 +22,19 @@ router = APIRouter()
 
 @router.get("/api/status")
 def api_status():
-    """{name: {up, detail}} — same shape as ia's harness_status()."""
+    """{name: {status, up, detail}} — one verdict per subsystem.
+
+    `up` is "not a failure" so the dashboard can render `warn` as warn rather
+    than collapsing it into red.
+    """
     out = {}
     try:
         for c in system_data.checks():
-            out[c["name"]] = {"up": bool(c["ok"]), "detail": c["detail"]}
+            out[c["name"]] = {
+                "status": c["status"],
+                "up": bool(c["ok"]),
+                "detail": c["detail"],
+            }
     except Exception as exc:
         raise HTTPException(500, str(exc)[:200])
     return JSONResponse(out)
@@ -43,14 +51,11 @@ def api_ollama_start():
 @router.post("/api/gateway/rebuild")
 def api_gateway_rebuild():
     """Recompose .effective.yaml from discovery + tiers, restart gateway."""
-    from pipa import config
     from data import services as services_data
 
-    try:
-        config.compose_litellm_config()
-        _verify_effective()
-    except Exception as exc:
-        raise HTTPException(500, f"compose failed, gateway untouched: {exc}")
+    # No pre-compose here: gateway_restart composes, then start_litellm
+    # verifies before spawning. Composing twice wrote the file twice for no
+    # gain and left the "compose failed" error message unreachable.
     ok, detail = services_data.gateway_restart()
     return JSONResponse({"ok": ok,
                          "detail": detail or ("gateway restarted" if ok else "restart failed")})
@@ -91,7 +96,7 @@ async def api_set_env_key(request: Request):
 def _dashboard_payload() -> dict:
     from pipa.model_registry import tier_policy, tier_resolution
     from pipa.recommendations import recommended_model, recommended_tier
-    from pipa.runtime import AGENT_MODEL_MAP
+    from pipa.runtime import agent_tier
     from data import agents as agents_data
 
     try:
@@ -123,7 +128,7 @@ def _dashboard_payload() -> dict:
     agents = []
     for a in discovered:
         name = a.get("name") or ""
-        default = normalize_tier(AGENT_MODEL_MAP.get(name, ""))
+        default = normalize_tier(agent_tier(name))
         ov = agents_data.override_for(name) or ""
         tier = normalize_tier(ov) or default
         entry = resolved.get(tier)

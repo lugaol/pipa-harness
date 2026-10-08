@@ -18,10 +18,10 @@ never in core.
 | `auto-update.sh` fast-forward updater | `pipa update/check-update/version` |
 | Single-flight install job runner + secret scrubbing | `dashboard/data/installer.py`, Install page |
 | `metrics_lib.py` shared usage parser | `pipa/metrics.py` (package) → `pipa usage-report` + Observability Usage tab |
-| `task-router.md` (route line, ≤3 slugs, union cap) | `rules/task-router.md` |
+| `task-router.md` (route line, ≤3 slugs, union cap) | `agents/router.md` |
 | `evals/validate.py` + `routing.json` | `evals/`, wired into `pipa eval` |
 | MCP bridge `--status`/`--self-test` contract + template | `mcp/_template/`, `mcp/README.md` |
-| L1 loop-triage discipline (report-only) | `rules/task-router.md` triage slug (no autonomous loops in core) |
+| L1 loop-triage discipline (report-only) | `agents/router.md` triage slug (no autonomous loops in core) |
 
 ## Framework parity screens (JS + JSON API, same actions as ia)
 
@@ -85,4 +85,4 @@ llama.cpp backend (platform-specific; noted), RADB/emulator device pages
   configuration lives on Tier Manager / Agents.
 - Compose-before-restart guard on tier saves + gateway rebuild (fail
   closed — a bad compose never takes the gateway down).
-- `rules/memory-hygiene.md` (search-before-write, budgets, staleness).
+  - `skills/working-discipline` (search-before-write, budgets, staleness).

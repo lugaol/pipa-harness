@@ -9,17 +9,23 @@ async function loadGraphStats() {
     el.innerHTML =
       '<div class="status-card"><div class="status-card-icon ' + (st.has_graph ? 'green' : 'red') + '">' +
       '<svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/><line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/></svg></div>' +
-      '<div class="status-card-body"><div class="status-card-name">' + (st.has_graph ? st.nodes + ' nodes' : 'no graph yet') + '</div>' +
+      '<div class="status-card-body"><div class="status-card-name">' +
+      escapeHtml(st.has_graph ? String(st.nodes) + ' nodes' : 'no graph yet') + '</div>' +
       '<div class="status-card-detail">' + escapeHtml(st.graph_path || st.root || '') + '</div></div>' +
       '<div class="status-card-dot ' + (st.has_graph ? 'ok' : 'fail') + '"></div></div>';
   } catch (e) {
-    el.innerHTML = '<div class="empty-state"><p>Graph status unavailable.</p></div>';
+    // The reason belongs in the region, not only the console: "unavailable"
+    // without a reason is indistinguishable from "graphify never ran".
+    console.error('graph stats fetch failed', e);
+    renderError(el, 'Graph status unavailable', e.message);
+    toast('Graph status unavailable: ' + e.message, 'error');
   }
 }
 
 async function runGraphSearch() {
   const input = document.getElementById('graph-q');
   const out = document.getElementById('graph-results');
+  if (!input || !out) return;
   const q = (input.value || '').trim();
   if (!q) { toast('Enter a symbol or query first', 'error'); return; }
   out.innerHTML = '<div class="empty-state"><p>Searching…</p></div>';
@@ -34,13 +40,19 @@ async function runGraphSearch() {
           return '<tr><td><div class="agent-name mono">' + escapeHtml(h.title) + '</div>' +
             (h.path ? '<div class="agent-path mono">' + escapeHtml(h.path) + '</div>' : '') + '</td>' +
             '<td class="agent-desc">' + escapeHtml(h.detail || '') + '</td>' +
-            '<td class="mono text-xs">' + h.score + '</td></tr>';
+            '<td class="mono text-xs">' + escapeHtml(String(h.score)) + '</td></tr>';
         }).join('') + '</tbody></table></div>';
     } else if (!r.cli_out) {
       html += '<div class="empty-state"><p>No hits — try a class, method or symbol name.</p></div>';
     }
     out.innerHTML = html;
-  } catch (e) { toast(e.message, 'error'); }
+  } catch (e) {
+    // Leave the region saying "failed": "Searching…" left in place reads as a
+    // search that is still running.
+    console.error('graph search failed', e);
+    renderError(out, 'Search failed', e.message);
+    toast(e.message, 'error');
+  }
 }
 
 async function refreshGraph() {

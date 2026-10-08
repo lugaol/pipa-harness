@@ -10,7 +10,6 @@ from typing import List, Optional
 
 from pipa import config, session
 
-
 def log_path() -> Path:
     """Active project's session log, else the harness state log path."""
     try:
@@ -21,14 +20,12 @@ def log_path() -> Path:
         return config.session_log_path(project)
     return config.state_dir() / "session.log.ndjson"
 
-
 def all_sessions() -> List[dict]:
     """Session summaries oldest-first: {id, runtime, start, end, events, tools, models}."""
     try:
         return session.sessions(log_path())
     except Exception:
         return []
-
 
 def events_for(sid: str) -> List[dict]:
     """All events of one session, chronological; [] when absent."""
@@ -37,10 +34,3 @@ def events_for(sid: str) -> List[dict]:
     except Exception:
         return []
 
-
-def tail(n: int = 20) -> List[dict]:
-    """Last n raw events of the active log."""
-    try:
-        return session.tail(log_path(), n)
-    except Exception:
-        return []

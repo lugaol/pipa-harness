@@ -22,42 +22,14 @@
   {% endif %}
 </section>
 
-{% if usage.per_day %}
-<section class="panel">
-  <h2>Sessions per day</h2>
-  <div class="table-wrap">
-  <table class="frag-table">
-    <thead><tr><th>day</th><th>sessions</th></tr></thead>
-    <tbody>
-      {% for day, n in usage.per_day %}<tr><td class="mono small">{{ day }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
-    </tbody>
-  </table>
-  </div>
-</section>
-{% endif %}
-
-{% for title, rows in [('Top tools', usage.top_tools), ('Top session models', usage.top_models), ('Runtimes', usage.runtimes)] %}
-{% if rows %}
-<section class="panel">
-  <h2>{{ title }}</h2>
-  <div class="table-wrap">
-  <table class="frag-table">
-    <thead><tr><th>name</th><th>count</th></tr></thead>
-    <tbody>
-      {% for name, n in rows %}<tr><td class="mono small">{{ name }}</td><td class="mono small">{{ n }}</td></tr>{% endfor %}
-    </tbody>
-  </table>
-  </div>
-</section>
-{% endif %}
-{% endfor %}
+{% include "usage_panels.html" %}
 
 {% if longest %}
 <section class="panel">
   <h2>Longest sessions</h2>
   <div class="table-wrap">
   <table class="frag-table">
-    <thead><tr><th>session</th><th>duration</th><th>events</th><th>runtime</th></tr></thead>
+    <thead><tr><th scope="col">session</th><th scope="col">duration</th><th scope="col">events</th><th scope="col">runtime</th></tr></thead>
     <tbody>
       {% for s in longest %}<tr><td class="mono small">{{ s.id }}</td><td class="mono small">{{ s.duration }}</td><td class="mono small">{{ s.events }}</td><td class="mono small">{{ s.runtime }}</td></tr>{% endfor %}
     </tbody>

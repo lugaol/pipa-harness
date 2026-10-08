@@ -13,14 +13,12 @@ from typing import Dict, List, Tuple
 
 from pipa import config
 
-
 def _http_up(url: str, timeout: float = 2.0) -> bool:
     try:
         with urllib.request.urlopen(url, timeout=timeout):
             return True
     except Exception:
         return False
-
 
 def list_providers() -> List[dict]:
     """[{slug, label, kind, key_rows:[{name, present}], models, ready, live}].
@@ -53,7 +51,6 @@ def list_providers() -> List[dict]:
         })
     return sorted(rows, key=lambda r: (r["kind"] != "local", r["label"].lower()))
 
-
 def test_provider(slug: str) -> Tuple[bool, str]:
     """Best-effort check for one provider; never spends cloud API calls."""
     from pipa.providers import PROVIDERS
@@ -70,10 +67,3 @@ def test_provider(slug: str) -> Tuple[bool, str]:
         return False, "ollama not reachable — start it (`pipa install ollama`)"
     return True, f"{p.label}: keys present (cloud endpoints are not live-called)"
 
-
-def provider_summary() -> Dict[str, int]:
-    rows = list_providers()
-    return {
-        "total": len(rows),
-        "ready": sum(1 for r in rows if r["ready"]),
-    }

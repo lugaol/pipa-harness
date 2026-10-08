@@ -5,6 +5,9 @@ on:
     paths:
       - "agents/**"
       - ".pipa/extension/agents/**"
+      - "skills/**"
+      - "skills-optional/**"
+      - "bin/pipa-check"
       - "tools/evals/**"
       - "action.yml"
   push:
@@ -12,6 +15,9 @@ on:
     paths:
       - "agents/**"
       - ".pipa/extension/agents/**"
+      - "skills/**"
+      - "skills-optional/**"
+      - "bin/pipa-check"
       - "tools/evals/**"
       - "action.yml"
 
@@ -28,3 +34,6 @@ jobs:
 
       - name: Run agent evals
         uses: ./
+
+      - name: Skill discovery contract
+        run: python3 bin/pipa-check skills

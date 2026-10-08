@@ -1,9 +1,9 @@
 """Recommended tiers per agent — drift hints and reset targets.
 
-Single source of truth: derived from `pipa.runtime.AGENT_MODEL_MAP`
-(the agent defaults). Never a mirrored static map — ia's recommendations.py
-carries a MUST-mirror warning precisely because a copy drifts; deriving
-makes that bug class impossible.
+Single source of truth: `pipa.runtime.agent_tiers()`, which reads
+models/tiers.yaml::agent_tiers. Never a mirrored static map — ia's
+recommendations.py carries a MUST-mirror warning precisely because a copy
+drifts; deriving makes that bug class impossible.
 
 Used only to compute "drift" hints and reset targets in the UI: never
 overwritten automatically.
@@ -13,17 +13,16 @@ from __future__ import annotations
 
 def recommended_tier(agent: str) -> str:
     """Default tier for an agent ("" when the agent has no default)."""
-    from pipa.model_registry import normalize_tier
-    from pipa.runtime import AGENT_MODEL_MAP
+    from pipa.runtime import agent_tier
 
-    return normalize_tier(AGENT_MODEL_MAP.get(agent, ""))
+    return agent_tier(agent)
 
 
 def recommended_tiers() -> dict:
     """{agent: tier} for every agent with a default."""
-    from pipa.runtime import AGENT_MODEL_MAP
+    from pipa.runtime import agent_tiers
 
-    return {a: recommended_tier(a) for a in AGENT_MODEL_MAP if recommended_tier(a)}
+    return {a: t for a, t in agent_tiers().items() if t}
 
 
 def recommended_model(agent: str) -> str:

@@ -18,16 +18,16 @@ def api_install_state():
 
     bin_of = {
         "uv": "uv", "ollama": "ollama", "litellm": "litellm",
-        "graphify": "graphify", "opencode": "opencode", "dsh": "dsh",
+        "graphify": "graphify", "opencode": "opencode",
     }
     stages = []
     for slug in INSTALL_COMPONENTS:
         binary = bin_of.get(slug)
         if slug == "verify":
             try:
-                from pipa.commands.doctor import _collect
+                from pipa.commands.doctor import collect_checks
 
-                checks = _collect()
+                checks = collect_checks()
                 fails = sum(1 for c in checks if c["status"] == "fail")
                 warns = sum(1 for c in checks if c["status"] == "warn")
                 ready = fails == 0

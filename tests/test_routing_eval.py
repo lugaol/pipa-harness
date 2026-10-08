@@ -59,10 +59,15 @@ def test_missing_prompt_rejected():
 
 
 def test_vocab_matches_task_router_doc():
-    """Slugs in routing.json must all appear in rules/task-router.md."""
-    doc = (HARNESS_ROOT / "rules" / "task-router.md").read_text()
+    """Slugs in routing.json must all appear in the router's documented vocabulary.
+
+    The vocabulary lives in agents/router.md — loaded on agent demand, not
+    always-loaded. It used to live in rules/task-router.md, which was removed
+    when the always-loaded rule files were folded into the AGENTS.md map.
+    """
+    doc = (HARNESS_ROOT / "agents" / "router.md").read_text()
     used = {s for c in _cases() for key in ("expect_slugs", "min_slugs", "forbidden_slugs")
             for s in c.get(key, []) or []}
     assert used <= validate.VOCAB
     for slug in validate.VOCAB:
-        assert f"`{slug}`" in doc, f"slug {slug} missing from task-router.md"
+        assert f"`{slug}`" in doc, f"slug {slug} missing from agents/router.md"

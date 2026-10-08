@@ -7,7 +7,12 @@ from pathlib import Path
 
 from . import __version__, config
 from .commands.eval import cmd_eval
+from .commands.agents import build_subparser as agents_parser
+from .commands.bus import build_subparser as bus_parser
+from .commands.check import cmd_check
+from .commands.contract_cmd import build_subparser as contract_parser
 from .commands.doctor import cmd_doctor
+from .commands.next import build_subparser as next_parser
 from .commands.lifecycle import build_subparsers as lifecycle_parsers
 from .commands.usage import build_subparser as usage_parser
 from .commands.memory_gc import build_subparser as memory_gc_parser
@@ -15,6 +20,7 @@ from .commands.triage import build_subparser as triage_parser
 from .commands.init import cmd_init
 from .commands.install import INSTALL_COMPONENTS, cmd_install
 from .commands.recall import cmd_recall
+from .commands.route import cmd_route
 from .commands.replay import cmd_diff, cmd_replay
 from .commands.runtime import cmd_runtime
 from .commands.spend import cmd_spend
@@ -79,10 +85,31 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_status)
 
-    sp = sub.add_parser("doctor", help="tier-system + gateway diagnostics (exit 1 on hard errors)")
+    sp = sub.add_parser(
+        "doctor",
+        help="diagnose the install: split-brain, wiring, model callability",
+    )
     sp.add_argument("--json", action="store_true")
     sp.set_defaults(func=cmd_doctor)
 
+    sp = sub.add_parser(
+        "check",
+        help="mechanical checks: config | models | tiers | secrets | all",
+    )
+    sp.add_argument(
+        "which", nargs="*", default=["all"],
+        help="all | config | models | tiers | secrets | branch",
+    )
+    sp.add_argument(
+        "--install-hooks", action="store_true",
+        help="wire the git hooks (pre-commit, commit-msg, pre-push)",
+    )
+    sp.set_defaults(func=cmd_check)
+
+    bus_parser(sub)
+    contract_parser(sub)
+    agents_parser(sub)
+    next_parser(sub)
     lifecycle_parsers(sub)
     usage_parser(sub)
     memory_gc_parser(sub)
@@ -98,6 +125,7 @@ def build_parser() -> argparse.ArgumentParser:
     sp.set_defaults(func=cmd_migrate)
 
     sp = sub.add_parser("hook", help="append to the shared NDJSON session log (internal)")
+    sp.add_argument("hook_args", nargs=argparse.REMAINDER)
     sp.set_defaults(func=lambda a: hooks.main(a.hook_args))
 
     sp = sub.add_parser("eval", help="run agent evals")
@@ -106,7 +134,7 @@ def build_parser() -> argparse.ArgumentParser:
 
     sp = sub.add_parser("install", help="install harness components")
     sp.add_argument("component", nargs="+",
-                    help="uv py-deps ollama litellm graphify dsh opencode apps verify | all")
+                    help="uv py-deps ollama litellm graphify opencode apps verify | all")
     sp.set_defaults(func=cmd_install)
 
     sp = sub.add_parser("replay", help="replay a session from the flight recorder")
@@ -128,6 +156,10 @@ def build_parser() -> argparse.ArgumentParser:
     sp.add_argument("--digest", action="store_true",
                     help="compact bounded digest for the memory-context plugin")
     sp.set_defaults(func=cmd_recall)
+
+    sp = sub.add_parser("route", help="show the Jev routing decision for a task")
+    sp.add_argument("task", nargs=argparse.REMAINDER, help="task description to classify")
+    sp.set_defaults(func=cmd_route)
 
     sp = sub.add_parser("spend", help="token/cost ledger written by the gateway")
     sp.add_argument("--since", help="only rows at/after this ISO ts")

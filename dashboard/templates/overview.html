@@ -12,9 +12,9 @@
   <section id="status-section">
     <div class="card-header">
       <h3>Harness Status</h3>
-      <span class="text-xs text-muted"><span class="mono" id="last-check">Last check: —</span> · <a href="/install" class="row-link">Install wizard →</a></span>
+      <span class="text-xs text-muted"><span class="mono" id="last-check" role="status" aria-live="polite">Last check: —</span> · <a href="/evals" class="row-link">Agent evals →</a> · <a href="/install" class="row-link">Install wizard →</a></span>
     </div>
-    <div class="status-grid" id="status-grid"></div>
+    <div class="status-grid" id="status-grid" role="status" aria-live="polite" aria-busy="true"></div>
   </section>
 
   <section id="keys-section" class="panel" style="margin-top:var(--sp-6, 24px)">
@@ -22,7 +22,7 @@
       <h3>API Keys</h3>
       <span class="text-xs text-muted">live view of <code class="mono">$PIPA_ROOT/.env</code> — saving restarts the gateway to apply the key · <a href="/providers" class="row-link">Manage providers →</a></span>
     </div>
-    <div id="keys-grid"></div>
+    <div id="keys-grid" role="status" aria-live="polite" aria-busy="true"></div>
   </section>
 </section>
 
@@ -47,7 +47,7 @@
   </div>
   <div class="agents-table-wrapper">
   <table class="agents-table">
-    <thead><tr><th>Project</th><th>Path</th><th>Rules</th><th>Skills</th><th>Memory</th><th>Runtime</th></tr></thead>
+    <thead><tr><th scope="col">Project</th><th scope="col">Path</th><th scope="col">Rules</th><th scope="col">Skills</th><th scope="col">Memory</th><th scope="col">Runtime</th></tr></thead>
     <tbody>
       {% for p in projects %}
       <tr>
@@ -59,7 +59,8 @@
         <td>
           <form method="post" action="/projects/runtime" class="inline-form">
             <input type="hidden" name="project" value="{{ p.path }}">
-            <select name="runtime">
+            <label class="text-xs text-muted" for="runtime-picker">Runtime</label>
+            <select id="runtime-picker" name="runtime">
               {% for r in runtimes %}
               <option value="{{ r }}" {{ 'selected' if p.runtime == r else '' }}>{{ r }}</option>
               {% endfor %}
@@ -81,7 +82,7 @@
   {% if mcp_servers is defined and mcp_servers %}
   <div class="agents-table-wrapper">
   <table class="agents-table">
-    <thead><tr><th>Server</th><th>Type</th><th>Endpoint</th><th>State</th><th></th></tr></thead>
+    <thead><tr><th scope="col">Server</th><th scope="col">Type</th><th scope="col">Endpoint</th><th scope="col">State</th><th scope="col"></th></tr></thead>
     <tbody>
       {% for s in mcp_servers %}
       <tr>

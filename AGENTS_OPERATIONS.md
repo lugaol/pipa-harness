@@ -65,12 +65,12 @@ Do NOT use for:
 - **Spend ledger:** the LiteLLM gateway logs metadata-only usage rows to
   `state/spend.ndjson`; inspect with `pipa spend [--since TS] [--json]`.
 - **Conformance:** `tests/test_conformance_*.py` pin runtime config contracts
-  (gateway aliases, dsh patch schema, opencode jsonc) — run before changing clis/, models/ or mcp/.
+  (gateway aliases, opencode jsonc) — run before changing clis/, models/ or mcp/.
 
 ## Repo layout
 
 `AGENTS.md` (router) · `AGENTS_OPERATIONS.md` (this file) · `pipa/` (CLI + core lib) ·
-`clis/` (per-runtime config: opencode, deepseek-harness) · `rules/` (path-scoped) ·
+`clis/` (per-runtime config: opencode) · `rules/` (path-scoped) ·
 `skills/` (trigger-loaded) · `agents/` (subagents) · `specs/` (plan→story) ·
 `bin/pipa` (entrypoint) · `models/` (LiteLLM settings; model lists discovered
 from providers into state/, composed to `.effective.yaml`) · `mcp/` (integration registry) ·

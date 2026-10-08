@@ -119,13 +119,33 @@ def test_doctor_json_shape(monkeypatch, tmp_path, capsys):
 
 def test_tier_policy_loader(monkeypatch, tmp_path):
     from pipa import config
-    from pipa.model_registry import agent_tier_defaults, tier_policy
+    from pipa.model_registry import TIER_ALIASES, agent_tier_defaults, tier_policy
 
     _mdir, _state = _env(monkeypatch, tmp_path)
     policy = tier_policy()
-    assert set(policy) == {"lowest", "low", "mid", "high", "xhigh"}
+    # The five routable tiers, plus `jev` — a documented decision-model tier
+    # that is NOT gateway-routable. It used to be filtered out here, so a whole
+    # documented block in tiers.yaml was unreachable and `pipa doctor` cheerfully
+    # reported "5 tiers documented" while a sixth sat in the file.
+    assert set(policy) == {*TIER_ALIASES, "jev"}
     assert policy["mid"]["label"] == "Mid"
+    assert policy["jev"]["label"]
     defaults = agent_tier_defaults()
     assert defaults["dev"] == "mid"
-    # unknown tier names in agent_tiers are dropped, never crash
-    assert all(v in policy for v in defaults.values())
+    # every agent default must name a tier the gateway can actually route
+    assert all(v in TIER_ALIASES for v in defaults.values())
+
+
+def test_undeclared_agent_tiers_are_reported(monkeypatch, tmp_path):
+    """A tiers.yaml row naming an unroutable tier must be surfaced, not dropped.
+
+    `router: jev` sat in agent_tiers for weeks: normalize_tier() rejected it,
+    agent_tier_defaults() dropped it silently, and the router quietly ran on
+    whatever it inherited. The row is now a hard failure.
+    """
+    from pipa import config
+    from pipa.model_registry import undeclared_agent_tiers
+
+    _mdir, _state = _env(monkeypatch, tmp_path)
+    undeclared = undeclared_agent_tiers()
+    assert undeclared == {}, f"tiers.yaml declares unroutable tiers: {undeclared}"

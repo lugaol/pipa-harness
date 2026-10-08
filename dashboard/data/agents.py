@@ -1,31 +1,25 @@
-"""Agent discovery + per-agent model overrides.
+"""Agent discovery + per-agent tier overrides.
 
 Frontmatter discovery over <harness>/agents/*.md plus the project agent
 dirs of registered projects (.pipa/agents-local, legacy extension dirs).
 Overrides persist at state/agent_llm_overrides.json.
+
+Thin adapter: the frontmatter parser is pipa.commands.agents.parse_frontmatter,
+which owns it. The copy that used to live here anchored on `^---\\n` and split
+on every colon, so an agent authored with CRLF line endings lost its entire
+frontmatter in the dashboard — model, description and all — while the CLI saw it
+perfectly.
 """
 from __future__ import annotations
 
-import re
 from pathlib import Path
-from typing import Dict, List, Tuple
+from typing import List
 
 from pipa import config
+from pipa.commands.agents import parse_frontmatter  # re-export: one parser
 from data import projects as projects_data
-_FRONTMATTER_RE = re.compile(r"^---\n(.*?)\n---\n(.*)$", re.DOTALL)
 
-
-def parse_frontmatter(text: str) -> Tuple[dict, str]:
-    """Ported from the old dashboard: flat `key: value` frontmatter only."""
-    m = _FRONTMATTER_RE.match(text)
-    if not m:
-        return {}, text
-    fm: Dict[str, str] = {}
-    for line in m.group(1).splitlines():
-        if ":" in line:
-            key, _, value = line.partition(":")
-            fm[key.strip()] = value.strip().strip('"').strip("'")
-    return fm, m.group(2)
+__all__ = ["parse_frontmatter", "discover_agents"]
 
 
 def _registry_projects() -> List[Path]:
@@ -46,7 +40,7 @@ def _project_agent_dirs(project: Path) -> List[Path]:
     return dirs
 
 
-def _agent_bases(root: Path) -> List[Tuple[Path, str]]:
+def _agent_bases(root: Path) -> List[tuple[Path, str]]:
     bases: List[Tuple[Path, str]] = [(root / "agents", "harness")]
     for project in _registry_projects():
         for d in _project_agent_dirs(project):

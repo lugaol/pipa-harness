@@ -19,8 +19,8 @@ def _readiness(root: Path, rt_name: str) -> list[tuple[bool, str]]:
         tiers = tier_assignments()
         out.append((bool(tiers),
                      f"tier aliases assigned ({', '.join(sorted(tiers)) or 'NONE — agents cannot pick models'})"))
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001 — report, never silently drop the row
+        out.append((False, f"tier assignments unreadable ({e})"))
     try:
         from urllib.request import Request, urlopen
 
@@ -69,8 +69,8 @@ def cmd_up(args) -> int:
             rep.ok("seeded default tier assignments (change on dashboard Models page)")
             for tier, alias in sorted(seeded.items()):
                 _say(f"       {tier:<7} -> {alias}")
-    except Exception:
-        pass
+    except Exception as e:  # noqa: BLE001
+        rep.warn(f"could not seed default tiers ({e}); assign them on the Models page")
 
     litellm_cfg, warn = config.pick_litellm_config(root)
     if warn:
@@ -122,7 +122,11 @@ def cmd_up(args) -> int:
     _say("Verifying...")
     from pipa.commands.status import cmd_status
 
-    cmd_status(args)
+    # `pipa up` exits with the verdict it just printed. Discarding it meant a
+    # run that ended "[FAIL] gateway not reachable" still exited 0, so every
+    # wrapper around it — the dashboard installer, CI, a shell `&&` chain —
+    # read it as success.
+    status_rc = cmd_status(args)
     try:
         from pipa.commands.lifecycle import freshness_note
 
@@ -141,8 +145,13 @@ def cmd_up(args) -> int:
         if not all(ok for ok, _ in readiness):
             _say("  Fix ✗ rows above, then re-run `pipa up`.")
     _say("")
-    _say("Done.")
+    if status_rc:
+        _say(f"Done, with failures — see the Verifying block above (exit {status_rc}).")
+    else:
+        _say("Done.")
     if dashboard_up:
         _say(f"  Dashboard: http://localhost:{config.DASHBOARD_PORT}")
     _say(f"  Logs: {config.state_dir()}/litellm.log · {config.state_dir()}/ollama.log    Stop: pipa stop")
-    return 0
+    # Optional gaps (an unindexed code graph) stay non-fatal; a failed health
+    # check does not.
+    return status_rc

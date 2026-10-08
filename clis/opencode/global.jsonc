@@ -20,9 +20,12 @@
   // Contract surface: global tier from the install + per-project overlay.
   // OpenCode reads <cwd>/AGENTS.md automatically; rules load from both tiers.
   // "@PIPA_ROOT@" prefixes are substituted at render time (pipa.runtime).
+  // The .pipa/ entries are relative to the project being worked on, so a
+  // single machine-global config loads each project's own facts and rules.
   "instructions": [
     "@PIPA_ROOT@/AGENTS.md",
     "@PIPA_ROOT@/rules/*.md",
+    ".pipa/AGENTS.md",
     ".pipa/rules/*.md"
   ],
 

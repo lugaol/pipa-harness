@@ -1,0 +1,289 @@
+# pipa.yaml - Unified configuration for pipa harness
+# Single source of truth for all harness settings
+# Migrated from: providers.yaml, tiers.yaml, settings.yaml, AGENTS.md
+
+harness:
+  name: "pipa-harness"
+  version: "2.0.0"
+  description: "Project-agnostic agent harness with Jev + LLM hybrid routing"
+
+# ============================================================
+# LLM Configuration
+# ============================================================
+models:
+  # Provider definitions (declarative, no code changes needed)
+  providers:
+    - name: ollama
+      type: local
+      requires: []
+      list_url: http://localhost:11434/v1/models
+      keep: local_only
+      litellm:
+        model: "openai/{id}"
+        api_base: http://localhost:11434/v1
+        api_key: ollama
+        custom_llm_provider: openai
+
+    - name: opencode-zen
+      type: cloud
+      requires: [OPENCODE_ZEN_API_KEY]
+      list_url: https://opencode.ai/zen/v1/models
+      keep: zen_free
+      litellm:
+        model: "openai/{id}"
+        api_base: https://opencode.ai/zen/v1
+        api_key: os.environ/OPENCODE_ZEN_API_KEY
+
+    - name: openrouter
+      type: cloud
+      requires: [OPENROUTER_API_KEY]
+      list_url: https://openrouter.ai/api/v1/models
+      keep: free
+      litellm:
+        model: "openrouter/{id}"
+        api_key: os.environ/OPENROUTER_API_KEY
+
+    - name: kilo
+      type: cloud
+      requires: [KILO_API_KEY]
+      list_url: https://api.kilo.ai/api/gateway/v1/models
+      keep: kilo_free
+      litellm:
+        model: "{id}"
+        custom_llm_provider: openai
+        api_base: https://api.kilo.ai/api/gateway
+        api_key: os.environ/KILO_API_KEY
+
+    # TypeSafe Jev - System One decision model
+    - name: typesafe-jev
+      type: cloud
+      requires: []  # Free via OpenCode Zen
+      list_url: https://opencode.ai/zen/v1/models
+      keep: jev_only
+      litellm:
+        model: "openai/{id}"
+        api_base: https://opencode.ai/zen/v1
+        api_key: os.environ/OPENCODE_ZEN_API_KEY
+        custom_llm_provider: openai
+
+  # Tier assignments (user-configurable)
+  tiers:
+    jev: typesafe-jev/jev-1.13-free
+    lowest: opencode-zen/mimo-v2.5-free
+    low: opencode-zen/deepseek-v4-flash-free
+    mid: opencode-zen/deepseek-v4-flash-free
+    high: kilo/kilo-auto/free
+    xhigh: kilo/stepfun/step-3.7-flash:free
+
+  # Tier metadata
+  tier_meta:
+    jev:
+      label: Jev
+      description: Fast structured decisions - routing, triage, classification
+      cost_ceiling_usd_per_1m: 0.0
+      latency_target_ms: 100
+      min_context: 4096
+      max_steps: 1
+    lowest:
+      label: Lowest
+      description: High-volume, tool-free first pass
+      cost_ceiling_usd_per_1m: 0.4
+      latency_target_ms: 3000
+      min_context: 16384
+      max_steps: 4
+    low:
+      label: Low
+      description: Scoped coding, search, quick verification
+      cost_ceiling_usd_per_1m: 0.4
+      latency_target_ms: 5000
+      min_context: 32768
+      max_steps: 6
+    mid:
+      label: Mid
+      description: Default implementation tier
+      cost_ceiling_usd_per_1m: 1.0
+      latency_target_ms: 10000
+      min_context: 65536
+      max_steps: 10
+    high:
+      label: High
+      description: Strong planning and critique
+      cost_ceiling_usd_per_1m: 3.0
+      latency_target_ms: 20000
+      min_context: 131072
+      max_steps: 16
+    xhigh:
+      label: X-High
+      description: Frontier tier - orchestrator and hardest design
+      cost_ceiling_usd_per_1m: 15.0
+      latency_target_ms: 30000
+      min_context: 200000
+      max_steps: 24
+
+# ============================================================
+# Agent Configuration
+# ============================================================
+agents:
+  # Router uses Jev (free, fast) with LLM fallback
+  router:
+    model: jev/jev-1.13-free
+    role: "Fast task classification and routing"
+    fallback: lowest
+
+  # Core agents
+  supervisor:
+    model: ${tier:mid}
+    role: "Orchestration, conflict resolution"
+    uses_router: true
+
+  explorer:
+    model: ${tier:lowest}
+    role: "Read-only code exploration"
+
+  implementer:
+    model: ${tier:mid}
+    role: "Code implementation"
+
+  verifier:
+    model: ${tier:low}
+    role: "Build verification, review"
+
+  researcher:
+    model: ${tier:high}
+    role: "Deep research"
+
+  # Planning agents (Phase 1)
+  analyst:
+    model: ${tier:high}
+    role: "Business analyst"
+
+  pm:
+    model: ${tier:high}
+    role: "Product manager"
+
+  architect:
+    model: ${tier:high}
+    role: "System architect"
+
+  sm:
+    model: ${tier:mid}
+    role: "Scrum master"
+
+# ============================================================
+# Rules Configuration (path-scoped)
+# ============================================================
+rules:
+  global:
+    - security.md
+    - testing.md
+    - git-workflow.md
+    - memory-hygiene.md
+    - token-economy.md
+    - degraded-mode.md
+    - task-router.md
+
+  path_scoped:
+    - glob: "app/src/main/cpp/**"
+      rules: ["audio-ndk.md"]
+    - glob: "app/src/main/res/**"
+      rules: ["ui-xml.md"]
+
+# ============================================================
+# Skills Configuration (trigger-loaded)
+# ============================================================
+skills:
+  - name: pipa-graphify
+    triggers: ["architecture", "how does X work", "knowledge graph"]
+    path: "skills/pipa-graphify/SKILL.md"
+
+  - name: pipa-vault
+    triggers: ["memory", "decisions", "recall"]
+    path: "skills/pipa-vault/SKILL.md"
+
+  - name: pipa-recall
+    triggers: ["recall", "memory query", "why did we"]
+    path: "skills/pipa-recall/SKILL.md"
+
+  - name: graphify
+    triggers: ["architecture", "how does X work", "knowledge graph"]
+    path: "skills/graphify/SKILL.md"
+
+  - name: debugging
+    triggers: ["bug", "error", "crash", "fix"]
+    path: "skills/debugging/SKILL.md"
+
+  - name: code-review
+    triggers: ["review", "PR", "diff", "code review"]
+    path: "skills/code-review/SKILL.md"
+
+  - name: performance
+    triggers: ["latency", "performance", "speed", "memory"]
+    path: "skills/performance/SKILL.md"
+
+  - name: release
+    triggers: ["release", "version", "tag", "deploy"]
+    path: "skills/release/SKILL.md"
+
+# ============================================================
+# Memory Configuration
+# ============================================================
+memory:
+  vault: "vault/"
+  db: "state/memory.db"
+  graph: "graphify-out/graph.json"
+  session: "state/SESSION.md"
+  plan: "state/PLAN.md"
+  jev_cache: "state/jev_cache.db"
+
+  budgets:
+    vault_notes: 100  # max lines per vault note
+    project_notes: 150  # max lines per project note
+    staleness_days: 180  # days before note is flagged
+
+# ============================================================
+# Jev Integration Configuration
+# ============================================================
+jev:
+  enabled: true
+  confidence_threshold: 0.90
+  tools: ["classify", "check", "ask", "match", "score"]
+
+  routing:
+    enabled: true
+    fallback_to_llm: true
+    timeout_ms: 5000
+
+  cache:
+    enabled: true
+    path: "state/jev_cache.db"
+    max_size_mb: 10
+
+  patterns:
+    # Pre-defined classification patterns
+    task_type:
+      explore: "Read-only code search, file lookup, explanation"
+      implement: "Code changes, bug fixes, new features"
+      verify: "Build verification, test running, review"
+      research: "Deep research, API docs, architecture analysis"
+      orchestrate: "Complex multi-agent coordination"
+
+    complexity:
+      simple: "Single file, clear fix, known pattern"
+      moderate: "Multiple files, some investigation needed"
+      complex: "Architecture change, deep investigation needed"
+
+# ============================================================
+# Gateway Settings
+# ============================================================
+gateway:
+  master_key: "sk-pipa-local"
+  port: 4000
+  routing_strategy: "simple-shuffle"
+  num_retries: 2
+  request_timeout: 300
+  context_compression:
+    enabled: true
+    threshold_lines: 200
+  cache:
+    enabled: true
+    provider: "auto"

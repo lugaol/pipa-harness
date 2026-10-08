@@ -8,8 +8,8 @@
 <form method="get" action="/context" class="picker" style="margin-bottom:0.85rem">
   <input type="hidden" name="tier" value="project">
   <input type="hidden" name="tab" value="{{ tab }}">
-  <label>Project:</label>
-  <select name="proj" onchange="this.form.submit()">
+  <label for="project-picker">Project</label>
+  <select id="project-picker" name="proj" data-submit-form>
     {% for p in projects %}<option value="{{ p['path'] }}" {% if p['path'] == proj %}selected{% endif %}>{{ p['path'].rsplit('/',1)[-1] }}</option>{% endfor %}
   </select>
   <noscript><button type="submit" class="btn-sm">Go</button></noscript>

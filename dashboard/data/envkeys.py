@@ -51,14 +51,12 @@ def managed_keys() -> set:
 
 
 def read_env_file() -> Dict[str, str]:
-    values: Dict[str, str] = {}
-    path = env_path()
-    if path.exists():
-        for line in path.read_text().splitlines():
-            if "=" in line and not line.lstrip().startswith("#"):
-                k, v = line.split("=", 1)
-                values[k.strip()] = v.strip().strip('"').strip("'")
-    return values
+    """Parsed $PIPA_ROOT/.env — delegated to pipa.config, the format's owner.
+
+    This used to keep its own line parser alongside config.load_dotenv's, so
+    the panel and the gateway could disagree about what the file says.
+    """
+    return config.read_env_file()
 
 
 def effective_values() -> Dict[str, str]:

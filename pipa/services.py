@@ -343,6 +343,16 @@ def start_litellm(rep: Reporter, litellm_config: Path) -> bool:
     if _http_up(url, headers=headers):
         rep.ok(f"litellm gateway already running (:{config.LITELLM_PORT})")
         return True
+    # HS-002: verify the config parses and carries models BEFORE spawning.
+    # The guard sits here, at the single owner of "start the gateway", so
+    # every caller (dashboard restart, `pipa up`, lifecycle rebuild) is
+    # covered. It used to live in the dashboard's page layer, where three of
+    # five restart paths bypassed it.
+    try:
+        config.verify_effective(litellm_config)
+    except ValueError as exc:
+        rep.warn(f"not starting the gateway — {exc}")
+        return False
     rep.add(f"starting litellm gateway (:{config.LITELLM_PORT})...")
     spend_log = config.state_dir() / "spend.ndjson"
     _start_daemon(

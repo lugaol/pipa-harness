@@ -20,11 +20,11 @@ from pipa import agent_tiers, config
 
 
 def _client():
-    from fastapi.testclient import TestClient
+    from browser_client import browser_client
 
     import server
 
-    return TestClient(server.app, raise_server_exceptions=False)
+    return browser_client(server.app)
 
 
 def _isolated_state(monkeypatch, tmp_path):
@@ -45,7 +45,7 @@ def _stub_resolution(monkeypatch, mapping):
 
 def test_primary_tier_default_from_map(monkeypatch, tmp_path):
     _isolated_state(monkeypatch, tmp_path)
-    assert rt.primary_tier() == rt.AGENT_MODEL_MAP["orchestrator"]
+    assert rt.primary_tier() == rt.agent_tier("orchestrator")
 
 
 def test_primary_tier_override_wins(monkeypatch, tmp_path):
@@ -53,13 +53,13 @@ def test_primary_tier_override_wins(monkeypatch, tmp_path):
     agent_tiers.set_tier_override("orchestrator", "low")
     assert rt.primary_tier() == "low"
     agent_tiers.reset_override("orchestrator")
-    assert rt.primary_tier() == rt.AGENT_MODEL_MAP["orchestrator"]
+    assert rt.primary_tier() == rt.agent_tier("orchestrator")
 
 
 def test_primary_tier_rejects_unknown(monkeypatch, tmp_path):
     _isolated_state(monkeypatch, tmp_path)
     agent_tiers.set_tier_override("orchestrator", "ultra")
-    assert rt.primary_tier() == rt.AGENT_MODEL_MAP["orchestrator"]
+    assert rt.primary_tier() == rt.agent_tier("orchestrator")
 
 
 def test_render_uses_orchestrator_when_resolvable(monkeypatch, tmp_path):
@@ -93,8 +93,8 @@ def test_orchestrator_routes(monkeypatch, tmp_path):
     assert r.status_code == 400
     r = client.post("/api/orchestrator/reset")
     assert r.status_code == 200, r.text
-    assert r.json()["tier"] == rt.AGENT_MODEL_MAP["orchestrator"]
+    assert r.json()["tier"] == rt.agent_tier("orchestrator")
     payload = client.get("/api/dashboard").json()
     orch = next(a for a in payload["agents"] if a["name"] == "orchestrator")
     assert orch["source"] == "primary"
-    assert orch["recommended"] == rt.AGENT_MODEL_MAP["orchestrator"]
+    assert orch["recommended"] == rt.agent_tier("orchestrator")

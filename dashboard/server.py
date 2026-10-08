@@ -26,6 +26,7 @@ from fastapi import FastAPI  # noqa: E402
 from fastapi.staticfiles import StaticFiles  # noqa: E402
 
 import pages  # noqa: E402
+from pages.security import same_origin_guard  # noqa: E402
 
 
 def create_app() -> FastAPI:
@@ -35,6 +36,12 @@ def create_app() -> FastAPI:
     # itself stays available at /openapi.json.
     app = FastAPI(title="pipa_harness dashboard", version="1.0.0",
                   docs_url=None, redoc_url=None)
+    # Refuses cross-origin writes and attaches the security headers. The
+    # dashboard rewrites the harness contract, writes provider API keys and
+    # restarts the gateway, so "anyone who can reach the socket" is not an
+    # acceptable trust boundary — see pages/security.py for why a CSRF token
+    # would be theatre here.
+    app.middleware("http")(same_origin_guard)
     for mod_info in sorted(pkgutil.iter_modules(pages.__path__), key=lambda m: m.name):
         if mod_info.name.startswith("_"):
             continue

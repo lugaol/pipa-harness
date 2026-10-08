@@ -9,6 +9,7 @@ import json
 import os
 import time
 import urllib.request
+from pathlib import Path
 
 from pipa import config
 from pipa.model_registry import (
@@ -17,10 +18,27 @@ from pipa.model_registry import (
     normalize_tier,
     tier_assignments,
     tier_policy,
+    undeclared_agent_tiers,
 )
 
 
-def _collect() -> list[dict]:
+def _instruction_globs(text: str) -> list[str]:
+    """Instruction globs from a rendered runtime config, JSONC-tolerant."""
+    try:
+        from pipa.runtime import _strip_jsonc
+
+        import json
+
+        cfg = json.loads(_strip_jsonc(text))
+    except Exception:
+        return []
+    value = cfg.get("instructions")
+    if isinstance(value, str):
+        return [value]
+    return [str(v) for v in value] if isinstance(value, list) else []
+
+
+def collect_checks() -> list[dict]:
     """[(status, name, detail)] with status in pass|warn|fail."""
     checks: list[dict] = []
 
@@ -41,37 +59,28 @@ def _collect() -> list[dict]:
         else:
             check("pass", "tiers.yaml", f"{len(policy)} tiers documented")
 
-    # ── 2. agent defaults vs code map ────────────────────────────────
-    try:
-        from pipa.runtime import AGENT_MODEL_MAP
-    except ImportError:
-        AGENT_MODEL_MAP = {}
+    # ── 2. agent tier defaults (single owner: models/tiers.yaml) ─────
     defaults = agent_tier_defaults()
-    bad = {a: t for a, t in defaults.items() if not normalize_tier(t)}
-    if bad:
+    undeclared = undeclared_agent_tiers()
+    if undeclared:
         check("fail", "agent_tiers",
-              f"unknown tiers: {', '.join(f'{a}={t}' for a, t in bad.items())}")
+              "tiers naming an unroutable tier: "
+              + ", ".join(f"{a}={t}" for a, t in sorted(undeclared.items())))
+    if not defaults:
+        check("warn", "agent_tiers", "no agent_tiers declared — using the built-in fallback")
     else:
-        drift = {a for a, t in AGENT_MODEL_MAP.items()
-                 if a in defaults and normalize_tier(t) != defaults[a]}
-        extra = {a for a in AGENT_MODEL_MAP if a not in defaults}
-        if drift or extra:
-            parts = []
-            if drift:
-                parts.append("drift: " + ", ".join(sorted(drift)))
-            if extra:
-                parts.append("unlisted in tiers.yaml: " + ", ".join(sorted(extra)))
-            check("warn", "agent_tiers", "; ".join(parts))
-        else:
-            check("pass", "agent_tiers",
-                  f"{len(defaults)} agents defaulted, in sync with runtime.py")
+        check("pass", "agent_tiers",
+              f"{len(defaults)} agents defaulted from tiers.yaml")
 
     # ── 3. providers registry ────────────────────────────────────────
     try:
-        from pipa.providers import PROVIDERS
+        from pipa.providers import PROVIDERS, PROVIDER_WARNINGS
 
         if PROVIDERS:
-            check("pass", "providers", f"{len(PROVIDERS)} providers wired")
+            detail = f"{len(PROVIDERS)} providers wired"
+            check("warn" if PROVIDER_WARNINGS else "pass", "providers",
+                  f"{detail} — {'; '.join(PROVIDER_WARNINGS)}"
+                  if PROVIDER_WARNINGS else detail)
         else:
             check("fail", "providers", "no providers in models/providers.yaml")
     except Exception as exc:
@@ -117,21 +126,105 @@ def _collect() -> list[dict]:
         check("fail", "gateway-config", f"compose failed: {exc}")
 
     # ── 6. credentials for assigned tiers ────────────────────────────
+    # A missing env key is only a problem if it actually blocks the model.
+    # A model can be served by more than one provider, and the credential check
+    # walks the catalog in dict order — so an unset key for a provider that
+    # merely *also* lists the alias used to fail tiers that call fine. Trust a
+    # recorded live probe over inferred wiring whenever one exists.
     try:
         from pipa.providers import missing_keys
     except ImportError:
         missing_keys = lambda _a: []  # noqa: E731
-    cred_missing = []
+    try:
+        verif_path = config.state_dir() / "model_verification.json"
+        probed: dict[str, bool] = {}
+        if verif_path.is_file():
+            raw = json.loads(verif_path.read_text())
+            probed = {
+                k: bool(v.get("ok"))
+                for k, v in raw.items()
+                if k != "_checked_at" and isinstance(v, dict)
+            }
+    except (OSError, ValueError):
+        probed = {}
+    cred_missing, cred_ok = [], 0
     for tier, alias in assigned.items():
+        if probed.get(alias) is True:
+            cred_ok += 1          # proven callable — keys are demonstrably fine
+            continue
         miss = missing_keys(alias)
-        if miss:
+        if miss and probed.get(alias) is not True:
             cred_missing.append(f"{tier} needs {', '.join(miss)}")
     if cred_missing:
         check("fail", "tier-credentials", "; ".join(cred_missing))
     elif assigned:
-        check("pass", "tier-credentials", "keys present for assigned tiers")
+        suffix = f" ({cred_ok} confirmed by live probe)" if cred_ok else ""
+        check("pass", "tier-credentials", f"keys present for assigned tiers{suffix}")
 
-    # ── 7. services (warnings only — `pipa up` starts them) ──────────
+    # ── 7. split-brain: is the CLI on PATH the same code the agent reads? ──
+    #
+    # This is the failure that costs a newcomer the most time. `bootstrap.sh`
+    # clones into ~/.pipa-harness and puts it on PATH, but a user working in a
+    # git checkout points opencode at THAT checkout. Two copies, no warning:
+    # `pipa <cmd>` runs one version while the agent reads another, so a fix
+    # appears to do nothing.
+    try:
+        import shutil
+        import subprocess as _sp
+
+        on_path = shutil.which("pipa")
+        here = Path(__file__).resolve().parent.parent.parent
+        if not on_path:
+            check("warn", "cli-on-path",
+                  "pipa not on PATH — add ~/.pipa-harness/bin to your shell PATH")
+        else:
+            cli_root = Path(on_path).resolve().parent.parent
+            if cli_root == here:
+                check("pass", "cli-on-path", f"pipa runs this checkout ({here})")
+            else:
+                check("fail", "cli-on-path",
+                      f"SPLIT-BRAIN: `pipa` on PATH is {cli_root}, "
+                      f"but the agent config points at {here}. Fix with: "
+                      f"make -C {here}/install path (or put {here}/bin on PATH "
+                      f"ahead of {cli_root / 'bin'})")
+    except Exception as exc:  # noqa: BLE001
+        check("warn", "cli-on-path", f"could not determine: {exc}")
+
+    # ── 8. is the project's AGENTS.md actually loaded by the agent? ──
+    try:
+        cfg_path = Path.home() / ".config/opencode/opencode.jsonc"
+        if cfg_path.is_file():
+            text = cfg_path.read_text(encoding="utf-8", errors="ignore")
+            instructions = _instruction_globs(text)
+            # Semantic, not a literal-substring test. It used to require the
+            # exact token `"AGENTS.md"` in quotes, which a rendered config can
+            # never satisfy: pipa substitutes @PIPA_ROOT@, so the entry reads
+            # "/Users/.../AGENTS.md". The check therefore failed on every
+            # correctly-rendered config.
+            has_project = any(
+                g.endswith("AGENTS.md") or g == "AGENTS.md" for g in instructions
+            )
+            has_overlay = any(".pipa/" in g for g in instructions)
+            if has_project and has_overlay:
+                check("pass", "agent-instructions",
+                      "project AGENTS.md and .pipa/ overlay are both loaded")
+            elif not has_project:
+                check("fail", "agent-instructions",
+                      "opencode.jsonc does not load project AGENTS.md — "
+                      "add \"AGENTS.md\" or \".pipa/AGENTS.md\" to "
+                      "instructions, or `pipa init` output is invisible "
+                      "to the agent")
+            else:
+                check("warn", "agent-instructions",
+                      "opencode.jsonc does not load the .pipa/ overlay "
+                      "(.pipa/AGENTS.md, .pipa/rules/*.md)")
+        else:
+            check("warn", "agent-instructions",
+                  f"no {cfg_path} — cannot verify what the agent loads")
+    except Exception as exc:  # noqa: BLE001
+        check("warn", "agent-instructions", f"could not read config: {exc}")
+
+    # ── 9. services (warnings only — `pipa up` starts them) ──────────
     try:
         req = urllib.request.Request(
             f"{config.LITELLM_URL}/v1/models",
@@ -152,7 +245,7 @@ def _collect() -> list[dict]:
 
 def cmd_doctor(args) -> int:
     config.load_dotenv()
-    checks = _collect()
+    checks = collect_checks()
     summary = {
         "pass": sum(1 for c in checks if c["status"] == "pass"),
         "warn": sum(1 for c in checks if c["status"] == "warn"),

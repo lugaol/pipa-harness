@@ -37,9 +37,9 @@ def _parse_ts(raw) -> datetime | None:
 def doctor_signal() -> dict:
     """{status, fail[], warn[]} — fail closed on reader errors."""
     try:
-        from pipa.commands.doctor import _collect
+        from pipa.commands.doctor import collect_checks
 
-        checks = _collect()
+        checks = collect_checks()
     except Exception as exc:
         return {"status": "unknown", "fail": [], "warn": [],
                 "detail": f"doctor unreadable: {exc}"}

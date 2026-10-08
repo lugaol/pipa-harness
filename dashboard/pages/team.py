@@ -62,12 +62,10 @@ def team_view(request: Request):
     try:
         spend = spend_mod.summarize()
     except Exception:
-        spend = {"rows": 0, "cost_usd": 0.0, "tokens_in": 0, "tokens_out": 0}
-    try:
-        usage = metrics_lib.build_report(summaries, spend)
-    except Exception:
-        usage = {"sessions": 0, "per_day": [], "top_tools": [],
-                 "top_models": [], "runtimes": [], "spend": spend}
+        spend = metrics_lib.empty_spend()
+    # Same owner, same shape, same degradation as /observability — these two
+    # panels used to render from two different hand-written fallback dicts.
+    usage = metrics_lib.build_report_or_empty(summaries, spend)
     durations = sorted(_durations(summaries), key=lambda d: -d["seconds"])
     secs = sorted(d["seconds"] for d in durations)
     if secs:

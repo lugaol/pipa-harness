@@ -2,17 +2,14 @@
 {% block title %}Graph · pipa{% endblock %}
 {% block pagetitle %}Graph{% endblock %}
 {% block pagesubtitle %}query the code graph before grep — search symbols, inspect the index, rebuild when the tree changes{% endblock %}
-{% block pagecss %}
-<link rel="stylesheet" href="/static/css/pages/graphify.css">
-{% endblock %}
 {% block content %}
 <section id="graph-page">
   <section id="graph-status-section">
     <div class="card-header">
       <h3>Index status</h3>
-      <button class="btn btn-secondary btn-sm" id="graph-refresh-btn" onclick="refreshGraph()">Rebuild graph</button>
+      <button class="btn btn-secondary btn-sm" id="graph-refresh-btn" data-action="refreshGraph">Rebuild graph</button>
     </div>
-    <div class="status-grid" id="graph-stats"></div>
+    <div class="status-grid" id="graph-stats" aria-live="polite" aria-busy="true"></div>
   </section>
 
   <section id="graph-search-section" style="margin-top:var(--sp-6, 24px)">
@@ -21,9 +18,9 @@
     </div>
     <div class="env-input-wrap" style="margin-bottom:12px">
       <input id="graph-q" type="text" placeholder="class, method or symbol…" style="flex:1">
-      <button class="btn btn-primary btn-sm" onclick="runGraphSearch()">Search</button>
+      <button class="btn btn-primary btn-sm" data-action="runGraphSearch">Search</button>
     </div>
-    <div id="graph-results"></div>
+    <div id="graph-results" role="status" aria-live="polite" aria-busy="true"></div>
   </section>
 </section>
 {% endblock %}

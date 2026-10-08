@@ -7,6 +7,7 @@ state/tier_assignments.json. Key NAMES are surfaced, never values.
 """
 from __future__ import annotations
 
+import json
 from typing import Dict, List
 
 from pipa.model_registry import (
@@ -17,6 +18,23 @@ from pipa.model_registry import (
     tier_assignments,
 )
 
+def verification() -> dict:
+    """{model: {ok, detail}} from the last live probe, plus its timestamp.
+
+    Written by `pipa-check models` / `pipa-check tiers`. Absence means "never
+    probed", which is not the same as broken — the UI must distinguish those.
+    """
+    from pipa import config
+
+    path = config.state_dir() / "model_verification.json"
+    try:
+        data = json.loads(path.read_text())
+    except (OSError, ValueError):
+        return {"checked_at": None, "results": {}}
+    if not isinstance(data, dict):
+        return {"checked_at": None, "results": {}}
+    checked_at = data.pop("_checked_at", None)
+    return {"checked_at": checked_at, "results": data}
 
 def env_keys() -> List[dict]:
     """[{name, present}] derived from provider wiring; values never read."""
@@ -26,7 +44,6 @@ def env_keys() -> List[dict]:
 
     names = sorted({k for p in PROVIDERS.values() for k in p.requires})
     return [{"name": name, "present": bool(os.environ.get(name))} for name in names]
-
 
 def catalog() -> List[dict]:
     """Flat discovered-model rows: [{alias, display, provider, kind, active}].
@@ -49,27 +66,13 @@ def catalog() -> List[dict]:
     ]
     return sorted(rows, key=lambda r: (r["provider"].lower(), r["display"]))
 
-
 def assignments() -> Dict[str, str]:
     """{tier -> alias} as configured by the user."""
     return tier_assignments()
 
-
 def set_tier(tier: str, alias: str) -> tuple[bool, str]:
     """Persist one user decision: tier -> model ('' clears)."""
     return set_tier_assignment(normalize_tier(tier) or tier, alias)
-
-
-def set_tiers_batch(assignments: dict) -> tuple[bool, str]:
-    """Persist multiple tier -> model assignments at once."""
-    last_ok, last_msg = True, "saved"
-    for tier, alias in assignments.items():
-        ok, msg = set_tier(tier, alias)
-        if not ok:
-            return False, msg
-        last_ok, last_msg = ok, msg
-    return last_ok, last_msg
-
 
 def ensure_seeded() -> bool:
     """Auto-seed tiers from discovered models when none are assigned."""
@@ -83,12 +86,10 @@ def ensure_seeded() -> bool:
     except Exception:
         return False
 
-
 def missing_keys_for(alias: str) -> List[str]:
     from pipa.providers import missing_keys
 
     return missing_keys(alias)
-
 
 def refresh_status() -> dict:
     """Discovery freshness for the Models page header."""
@@ -106,7 +107,6 @@ def refresh_status() -> dict:
         })
     return {"fetched_at": fetched_at(), "providers": providers}
 
-
 def refresh_models(timeout: int = 8) -> dict:
     """Live re-discovery from every provider (dashboard Refresh button)."""
     from pipa.providers import refresh
@@ -120,40 +120,3 @@ def refresh_models(timeout: int = 8) -> dict:
         pass
     return summary
 
-
-def tier_rows() -> List[dict]:
-    """The five fixed tiers with their current user-chosen model, if any.
-
-    [{alias, label, description, cost_ceiling_usd_per_1m, assigned_alias,
-      display, status}]
-      status: 'unset' | 'ready' | 'needs-key'
-    """
-    cat = {c["alias"]: c for c in catalog()}
-    assigned = assignments()
-    try:
-        from pipa.model_registry import tier_policy
-
-        policy = tier_policy()
-    except Exception:
-        policy = {}
-    rows = []
-    for tier in TIER_ALIASES:
-        alias = assigned.get(tier, "")
-        info = cat.get(alias)
-        meta = policy.get(tier) or {}
-        if not alias or info is None:
-            status, display = "unset", ""
-        else:
-            missing = missing_keys_for(alias)
-            display = info["display"]
-            status = "needs-key" if missing else "ready"
-        rows.append({
-            "alias": tier,
-            "label": meta.get("label") or tier.capitalize(),
-            "description": meta.get("description") or "",
-            "cost_ceiling_usd_per_1m": meta.get("cost_ceiling_usd_per_1m"),
-            "assigned_alias": alias,
-            "display": display,
-            "status": status,
-        })
-    return rows

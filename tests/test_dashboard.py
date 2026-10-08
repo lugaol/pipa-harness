@@ -28,8 +28,11 @@ PAGES = [
     "api_status", "api_models", "api_install", "api_graph", "api_docs",
     "tiers",
     "docs", "graphify",
-    # Redirects (kept for backwards compat, return 307)
-    "sessions", "spend", "memory", "graph", "projects", "agents",
+    # All retired paths live in ONE module. They used to be five separate
+    # page modules (sessions/spend/memory/graph/projects) that each kept the
+    # retired page's duplicate POST handlers alive — /memory/save and
+    # /sessions/{sid} were served by code nothing could reach.
+    "compat", "agents",
 ]
 
 
@@ -40,6 +43,36 @@ def test_page_module_exposes_router_with_routes(name):
     module = importlib.import_module(f"pages.{name}")
     assert hasattr(module, "router"), f"pages/{name}.py must expose `router`"
     assert len(module.router.routes) > 0, f"pages/{name}.py router has no routes"
+
+
+def test_retired_paths_are_redirect_shims_only():
+    """Compat routes must redirect — never reimplement a retired page.
+
+    The residue that survived the nav merge was duplicate handlers registered
+    behind a redirect. This asserts the shape stays clean: every route in
+    pages/compat.py is a GET that returns a redirect.
+    """
+    import inspect
+
+    from pages import compat
+
+    assert len(compat.router.routes) >= 7, "expected the retired paths to be covered"
+    for route in compat.router.routes:
+        assert route.methods == {"GET"}, f"{route.path} must be GET-only"
+        src = inspect.getsource(route.endpoint)
+        assert "RedirectResponse" in src, f"{route.path} must only redirect"
+        assert "@router.post" not in src, f"{route.path} must not own a POST"
+
+
+def test_no_retired_page_modules_remain():
+    """The 10->5 nav merge must not leave whole page modules behind."""
+    from pathlib import Path
+
+    pages_dir = Path(__file__).resolve().parent.parent / "dashboard" / "pages"
+    for retired in ("sessions", "spend", "memory", "graph", "projects"):
+        assert not (pages_dir / f"{retired}.py").exists(), (
+            f"pages/{retired}.py is retired — its redirect belongs in pages/compat.py"
+        )
 
 
 def test_gateway_list_models_unreachable_returns_empty(monkeypatch):
@@ -104,12 +137,20 @@ def test_run_evals_parses_runner_json(monkeypatch, tmp_path):
     import pages.evals as evals_page
 
     fake_script = tmp_path / "run.py"
+    # The runner's real shape: per-agent `checks` of {name: {pass, msg}}.
+    # The old shape put booleans alongside the dicts, and the page read only
+    # the dicts — so a failing boolean check was invisible in the UI too.
     report = {
-        "total": 2,
+        "total": 3,
         "failed": 1,
         "results": [
-            {"file": "agents/a.md", "gate": {"pass": True}},
-            {"file": "agents/b.md", "gate": {"pass": False}, "extra": "ignored"},
+            {"file": "agents/a.md", "checks": {
+                "delegation_report": {"pass": True, "msg": "ok"},
+                "no_hardcoded_model": {"pass": True, "msg": "tier mid"},
+            }},
+            {"file": "agents/b.md", "checks": {
+                "delegation_report": {"pass": False, "msg": "missing report line"},
+            }},
         ],
     }
     fake_script.write_text(
@@ -120,11 +161,35 @@ def test_run_evals_parses_runner_json(monkeypatch, tmp_path):
 
     result = evals_page.run_evals()
     assert result["ok"] is True
-    assert result["total"] == 2
+    assert result["total"] == 3
     assert result["failed"] == 1
     assert [r["file"] for r in result["rows"]] == ["agents/a.md", "agents/b.md"]
     assert result["rows"][0]["ok"] is True
     assert result["rows"][1]["ok"] is False
+    # every check is surfaced, not just the passing ones
+    assert len(result["rows"][0]["checks"]) == 2
+    assert result["rows"][1]["checks"][0]["msg"] == "missing report line"
+
+
+def test_evals_page_renders_without_caching_a_global(monkeypatch, tmp_path):
+    """Two visitors must not race on a shared module-level result.
+
+    The page used to store the last report in a module global, so concurrent
+    requests overwrote each other and one visitor saw the other's run.
+    """
+    import pages.evals as evals_page
+
+    seen = []
+
+    def fake_run():
+        seen.append(1)
+        return {"ok": True, "detail": "", "total": 0, "failed": 0, "rows": []}
+
+    monkeypatch.setattr(evals_page, "run_evals", fake_run)
+    client = _client()
+    assert client.get("/evals").status_code == 200
+    assert client.get("/evals").status_code == 200
+    assert len(seen) == 2, "each load must run fresh, not serve a cached global"
 
 
 def test_system_checks_shape():
@@ -140,11 +205,11 @@ def test_system_checks_shape():
 
 def _client():
     pytest.importorskip("httpx")
-    from fastapi.testclient import TestClient
+    from browser_client import browser_client
 
     import server
 
-    return TestClient(server.app)
+    return browser_client(server.app)
 
 
 def test_app_serves_pages():
@@ -177,8 +242,11 @@ def test_old_extensions_url_redirects_to_projects():
 def test_agent_tier_post_roundtrip(monkeypatch, tmp_path):
     client = _client()
     from pipa import config
+    import pipa.runtime as runtime
 
     monkeypatch.setattr(config, "state_dir", lambda: tmp_path)
+    calls = []
+    monkeypatch.setattr(runtime, "refresh_agents", lambda *a, **k: calls.append(1) or [])
     resp = client.post(
         "/api/agent-tier",
         data={"agent": "@dev", "tier": "mid"},
@@ -188,6 +256,7 @@ def test_agent_tier_post_roundtrip(monkeypatch, tmp_path):
     assert resp.headers["location"].startswith("/")
     stored = json.loads((tmp_path / "agent_llm_overrides.json").read_text())
     assert stored == {"@dev": {"tier": "mid"}}
+    assert calls == [1], "the form save must also re-render the deployed agents"
 
 
 # ── context page (v2) ───────────────────────────────────────────────────────
@@ -314,8 +383,10 @@ def test_agents_tab_override_single_source(monkeypatch, tmp_path):
     state = tmp_path / "state"
     state.mkdir()
     from pipa import config
+    import pipa.runtime as runtime
 
     monkeypatch.setattr(config, "state_dir", lambda: state)
+    monkeypatch.setattr(runtime, "refresh_agents", lambda *a, **k: [])
 
     resp = client.post(
         "/api/agent-tier",
@@ -474,13 +545,13 @@ def test_projects_runtime_setter_writes_marker(monkeypatch, tmp_path):
     )
     monkeypatch.setattr(config, "state_dir", lambda: state)
 
-    ok, msg = projects_data.set_runtime(str(proj), "deepseek-harness")
+    ok, msg = projects_data.set_runtime(str(proj), "opencode")
     assert ok, msg
     marker = proj / ".pipa" / "runtime"
     assert marker.is_file()
-    assert marker.read_text().startswith("deepseek-harness")
+    assert marker.read_text().startswith("opencode")
     registry = json.loads((state / "projects.json").read_text())
-    assert registry[0]["runtime"] == "deepseek-harness"
+    assert registry[0]["runtime"] == "opencode"
 
     ok2, _ = projects_data.set_runtime(str(tmp_path / "not-registered"), "opencode")
     assert ok2 is False

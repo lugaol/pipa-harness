@@ -25,11 +25,23 @@ TIMEOUT_SECS = 8
 # ── keep filters (free-tier only) ──────────────────────────────────────────
 
 _KEEP_FILTERS: Dict[str, Callable[[str], bool]] = {
+    "all": lambda mid: True,
     "free": lambda mid: mid.endswith(":free"),
     "zen_free": lambda mid: mid.endswith("-free"),
     "kilo_free": lambda mid: mid.endswith(":free") or mid == "kilo-auto/free",
     "local_only": lambda mid: not mid.endswith(":cloud"),
+    # Explicit "admit nothing" — the fail-closed target for a bad filter name.
+    "none": lambda mid: False,
+    # A provider sharing a listing endpoint with a general one (opencode.ai/zen)
+    # must narrow to its own slice. Without a filter here the unknown name falls
+    # through to "keep everything", and that provider's whole catalog — 84
+    # models including every claude-* — lands in the gateway and the picker.
+    "jev_only": lambda mid: mid.startswith("jev"),
 }
+
+# Non-fatal load problems (unknown keep filter, unreadable yaml). Surfaced by
+# `pipa doctor` so a provider silently dropping to zero models is visible.
+PROVIDER_WARNINGS: List[str] = []
 
 
 @dataclass(frozen=True)
@@ -59,10 +71,23 @@ def _load_providers() -> Dict[str, Provider]:
                 if not slug:
                     continue
                 keep_name = str(entry.get("keep") or "").strip()
-                keep_fn = _KEEP_FILTERS.get(keep_name, lambda mid: True)
+                if not keep_name:
+                    # No filter declared: the provider curates its own catalog.
+                    keep_fn = _KEEP_FILTERS["all"]
+                else:
+                    keep_fn = _KEEP_FILTERS.get(keep_name)
+                    if keep_fn is None:
+                        # Fail closed. An unknown filter name used to fall
+                        # through to "keep every model the provider lists",
+                        # which is how one misconfigured provider injected 84
+                        # unusable ids into the gateway and the picker.
+                        keep_fn = _KEEP_FILTERS["none"]
+                        PROVIDER_WARNINGS.append(
+                            f"{slug}: unknown keep filter {keep_name!r} — keeping nothing"
+                        )
                 litellm_tpl = dict(entry.get("litellm") or {})
 
-                def _make_params(tpl, _slug=slug):
+                def _make_params(tpl):
                     def _params(mid: str) -> dict:
                         d: dict = {}
                         for k, v in tpl.items():
@@ -83,9 +108,12 @@ def _load_providers() -> Dict[str, Provider]:
                 )
             if out:
                 return out
-        except Exception:
-            pass
-    # Fallback — should not normally be reached
+        except Exception as exc:
+            PROVIDER_WARNINGS.append(f"providers.yaml unreadable ({exc}); using built-in table")
+    # Fallback — reached only when models/providers.yaml is missing or broken.
+    PROVIDER_WARNINGS.append(
+        "using the built-in provider table — models/providers.yaml unreadable"
+    )
     return {
         "ollama": Provider(
             slug="ollama", label="Ollama", kind="local", requires=(),
@@ -187,6 +215,33 @@ def cached_catalog() -> dict:
         return {}
     provs = data.get("providers") if isinstance(data, dict) else None
     return provs if isinstance(provs, dict) else {}
+
+
+def resolve_backing(catalog: dict | None = None) -> dict[str, str]:
+    """{model id -> provider slug} — the single owner of provider attribution.
+
+    Two providers can report the same id (openrouter and kilo both list
+    `nvidia/nemotron-3-super-120b-a12b:free`; opencode-zen and typesafe-jev
+    share a listing endpoint). Which one actually serves the request is decided
+    here, once, and both the gateway composer and the model registry read it.
+
+    They used to decide independently and disagreed: the registry took the
+    FIRST provider to report an id, the composer let the LAST one overwrite.
+    So the gateway routed `nvidia/...:free` through kilo (whose key was set)
+    while the registry attributed it to openrouter (whose key was not), marked
+    it inactive, and dropped it from the model picker — a working model
+    invisible to the user, and a wrong-key check in `pipa doctor`.
+
+    Rule: later entries in providers.yaml win, which is what the composer
+    already did, so the gateway's routing is unchanged.
+    """
+    catalog = cached_catalog() if catalog is None else catalog
+    out: dict[str, str] = {}
+    for slug in PROVIDERS:
+        entry = catalog.get(slug) or {}
+        for m in entry.get("models") or []:
+            out[str(m.get("id") or "")] = slug
+    return out
 
 
 def fetched_at() -> Optional[str]:

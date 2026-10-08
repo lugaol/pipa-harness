@@ -3,7 +3,7 @@
 
 Usage: python3 evals/validate.py [--strict]
 - Validates every case has id/prompt and (expect_slugs|min_slugs|should_trigger).
-- Validates slugs against the router's Slug column vocabulary (rules/task-router.md).
+- Validates slugs against the router's slug vocabulary (agents/router.md).
 - Fails on >3 expected slugs (union cap), unknown slugs, or negative cases
   that expect a forbidden slug.
 Exit 0 = pass. Wire to CI + run on every router/skill edit.

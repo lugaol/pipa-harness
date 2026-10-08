@@ -26,7 +26,6 @@ _VALID_UNTIL_RE = re.compile(r"^valid_until:\s*(\S*)\s*$", re.MULTILINE)
 
 _TITLE_RE = re.compile(r"^#\s+(.+)$", re.MULTILINE)
 
-
 def _scope_roots(scope: str, project_path: Optional[str],
                  writable_only: bool = False) -> List[Path]:
     """Candidate roots for a scope; may not exist yet (first-note case)."""
@@ -47,7 +46,6 @@ def _scope_roots(scope: str, project_path: Optional[str],
                     roots.append(legacy)
     return roots
 
-
 def _resolve_project(project_path: Optional[str]) -> Optional[Path]:
     from data import projects as projects_data
 
@@ -63,21 +61,11 @@ def _resolve_project(project_path: Optional[str]) -> Optional[Path]:
         return found
     return Path(entries[-1]["path"]).expanduser() if entries else None
 
-
-def scopes_available(project_path: Optional[str]) -> dict:
-    """{scope: bool} — which pickers to enable in the UI."""
-    return {
-        s: bool(_scope_roots(s, project_path)) or s == "global"
-        for s in _SCOPES
-    }
-
-
 def _parse_valid_until(content: str) -> Optional[str]:
     m = _VALID_UNTIL_RE.search(content)
     raw = m.group(1) if m else ""
     dm = _DATE_RE.search(raw)
     return dm.group(0) if dm else None
-
 
 def _is_expired(valid_until: Optional[str]) -> bool:
     if not valid_until:
@@ -86,7 +74,6 @@ def _is_expired(valid_until: Optional[str]) -> bool:
         return date.fromisoformat(valid_until) < date.today()
     except ValueError:
         return False
-
 
 def list_notes(scope: str, project_path: Optional[str] = None) -> List[dict]:
     """[{root, path_rel, title, group, size_h, mtime_h, valid_until,
@@ -122,11 +109,9 @@ def list_notes(scope: str, project_path: Optional[str] = None) -> List[dict]:
     out.sort(key=lambda n: (n["group"], n["path_rel"]))
     return out
 
-
 def _stamp(ts: float) -> str:
     from datetime import datetime
     return datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
-
 
 def resolve_note(scope: str, rel: str,
                  project_path: Optional[str] = None) -> Optional[Path]:
@@ -150,7 +135,6 @@ def resolve_note(scope: str, rel: str,
         return resolved if str(inside) == rel else None
     return None
 
-
 def read_note(scope: str, rel: str,
               project_path: Optional[str] = None) -> Optional[str]:
     target = resolve_note(scope, rel, project_path)
@@ -160,7 +144,6 @@ def read_note(scope: str, rel: str,
         return target.read_text(errors="replace")
     except OSError:
         return None
-
 
 def new_note_path(scope: str, name: str) -> Tuple[bool, str]:
     """'my-decision' → 'decisions/my-decision.md'; explicit subdirs allowed."""
@@ -175,7 +158,6 @@ def new_note_path(scope: str, name: str) -> Tuple[bool, str]:
     if first not in ("decisions", "research", "architecture", "notes"):
         stem = f"notes/{stem}"
     return True, f"{stem}.md"
-
 
 def write_note(scope: str, rel: str, content: str,
                project_path: Optional[str] = None) -> Tuple[bool, str]:
@@ -192,7 +174,6 @@ def write_note(scope: str, rel: str, content: str,
         return False, f"write failed: {exc}"
     return True, ""
 
-
 def delete_note(scope: str, rel: str,
                 project_path: Optional[str] = None) -> Tuple[bool, str]:
     target = resolve_note(scope, rel, project_path)
@@ -205,7 +186,6 @@ def delete_note(scope: str, rel: str,
     except OSError as exc:
         return False, f"delete failed: {exc}"
     return True, ""
-
 
 def set_expiry(scope: str, rel: str, valid_until: Optional[str],
                project_path: Optional[str] = None) -> Tuple[bool, str]:
@@ -244,12 +224,10 @@ def set_expiry(scope: str, rel: str, valid_until: Optional[str],
             return ok, msg
     return True, ""
 
-
 def extend_years(scope: str, rel: str, years: int = 1,
                  project_path: Optional[str] = None) -> Tuple[bool, str]:
     target = date.today().replace(year=date.today().year + years)
     return set_expiry(scope, rel, target.isoformat(), project_path)
-
 
 def recall(query: str, project_path: Optional[str], limit: int = 12) -> dict:
     """Fan-out over memory-db + vault + code-graph with expiry-aware ranking."""

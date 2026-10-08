@@ -85,3 +85,97 @@ def test_no_secret_values_in_provider_rows(monkeypatch, tmp_path):
     monkeypatch.setenv("KILO_API_KEY", secret)
     rows = providers_data.list_providers()
     assert secret not in repr(rows)
+
+
+# ── provider attribution: one owner, two consumers ─────────────────────────
+
+def test_registry_and_composer_agree_on_which_provider_owns_an_id():
+    """A duplicated model id must be attributed the same way everywhere.
+
+    Regression: the registry took the FIRST provider to report an id while the
+    composer let the LAST one overwrite. For
+    `nvidia/nemotron-3-super-120b-a12b:free` (reported by both openrouter and
+    kilo) the gateway routed it through kilo — whose key was set — while the
+    registry attributed it to openrouter, whose key was not, marked it
+    inactive, and dropped it from the model picker. A working model the user
+    could not see, plus a credential check pointed at the wrong provider.
+    """
+    from pipa.providers import resolve_backing
+
+    catalog = {
+        "openrouter": {"ok": True, "models": [{"id": "shared/free"}, {"id": "or-only"}]},
+        "kilo": {"ok": True, "models": [{"id": "shared/free"}, {"id": "kilo-only"}]},
+    }
+    backing = resolve_backing(catalog)
+    assert backing["shared/free"] == "kilo", (
+        f"later provider should own a duplicated id, got {backing['shared/free']!r}"
+    )
+    assert backing["or-only"] == "openrouter"
+    assert backing["kilo-only"] == "kilo"
+
+
+def test_only_the_backing_provider_reaches_the_registry():
+    """A model owned by a later provider must not be listed twice."""
+    from pipa import model_registry
+    from pipa.providers import resolve_backing
+
+    catalog = {
+        "openrouter": {"ok": True, "models": [{"id": "shared/free"}]},
+        "kilo": {"ok": True, "models": [{"id": "shared/free"}]},
+    }
+    backing = resolve_backing(catalog)
+    monkey = catalog
+    owners = [slug for slug in monkey if any(backing[m["id"]] == slug
+                                             for m in monkey[slug]["models"])]
+    assert sorted(owners) == ["kilo"], owners
+
+
+def test_load_dotenv_refills_an_empty_key(monkeypatch, tmp_path):
+    """A long-lived process must not keep a key it once saw as empty.
+
+    Regression: load_dotenv skipped any key already in os.environ, including
+    one present but EMPTY. The dashboard is a daemon — if it started while a
+    key was unset, it held `KIMI_API_KEY=""` forever, every later compose
+    judged kimi unavailable, and the gateway silently lost the paid provider
+    along with the tier alias pointing at one. The user had paid for the key
+    and the harness had quietly stopped routing to it.
+    """
+    from pipa import config
+
+    env = tmp_path / ".env"
+    env.write_text('KIMI_API_KEY=sk-real\nOTHER=sk-other\n')
+    monkeypatch.setattr(config, "harness_root", lambda: tmp_path)
+    monkeypatch.setenv("KIMI_API_KEY", "")   # stale daemon state
+    monkeypatch.delenv("OTHER", raising=False)
+
+    config.load_dotenv()
+
+    assert config.os.environ["KIMI_API_KEY"] == "sk-real", (
+        "an empty env var must be refilled from .env, not treated as set"
+    )
+    assert config.os.environ["OTHER"] == "sk-other"
+
+
+def test_load_dotenv_still_respects_a_real_override(monkeypatch, tmp_path):
+    """A non-empty value already in the environment wins — that is the point."""
+    from pipa import config
+
+    env = tmp_path / ".env"
+    env.write_text("KIMI_API_KEY=sk-from-file\n")
+    monkeypatch.setattr(config, "harness_root", lambda: tmp_path)
+    monkeypatch.setenv("KIMI_API_KEY", "sk-from-shell")
+
+    config.load_dotenv()
+    assert config.os.environ["KIMI_API_KEY"] == "sk-from-shell"
+
+
+def test_force_overwrites_a_set_key(monkeypatch, tmp_path):
+    from pipa import config
+
+    env = tmp_path / ".env"
+    env.write_text("KIMI_API_KEY=sk-new\n")
+    monkeypatch.setattr(config, "harness_root", lambda: tmp_path)
+    monkeypatch.setenv("KIMI_API_KEY", "sk-old")
+
+    config.load_dotenv(force=True)
+    assert config.os.environ["KIMI_API_KEY"] == "sk-new"

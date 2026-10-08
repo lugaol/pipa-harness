@@ -51,11 +51,11 @@ def test_install_verify_component_present():
 
 
 def test_install_state_includes_verify():
-    from fastapi.testclient import TestClient
+    from browser_client import browser_client
 
     import server
 
-    client = TestClient(server.app, raise_server_exceptions=False)
+    client = browser_client(server.app)
     slugs = [s["slug"] for s in client.get("/api/install/state").json()["stages"]]
     assert "verify" in slugs
 
@@ -80,12 +80,58 @@ def test_freshness_note_flags_ahead(monkeypatch):
     assert note and "pipa update" in note
 
 
-def test_orchestrator_default_in_sync():
-    from pipa.model_registry import agent_tier_defaults
-    from pipa.runtime import AGENT_MODEL_MAP
+def test_agent_tier_defaults_have_a_single_owner():
+    """models/tiers.yaml is the only place an agent's default tier is written.
 
-    assert AGENT_MODEL_MAP["orchestrator"] == "xhigh"
-    assert agent_tier_defaults()["orchestrator"] == "xhigh"
+    This replaces an older test that compared runtime.AGENT_MODEL_MAP against
+    tiers.yaml and failed on drift — a test that only existed because the fact
+    was written twice. With one owner there is nothing to drift, so the
+    assertion is now that the owner is readable, complete, and routable.
+    """
+    from pipa.model_registry import TIER_ALIASES, undeclared_agent_tiers
+    from pipa.runtime import agent_tiers
+
+    declared = agent_tiers()
+    assert declared, "tiers.yaml must declare agent defaults"
+    assert not undeclared_agent_tiers(), (
+        "every agent_tiers row must name a tier the gateway can route"
+    )
+    for agent, tier in declared.items():
+        assert tier in TIER_ALIASES, f"{agent} -> {tier!r}"
+
+
+def test_agent_frontmatter_pins_a_tier_not_a_model_id():
+    """agents/*.md must reference a tier alias, never a concrete model id.
+
+    A hardcoded id is a future HTTP 400, and it silently defeated every tier
+    reassignment: the dashboard moved tiers, the gateway followed, and the
+    agents kept running the id written in their frontmatter.
+    """
+    import re
+    from pathlib import Path
+
+    from pipa.model_registry import TIER_ALIASES
+    from pipa.runtime import agent_tiers
+
+    agents_dir = Path(__file__).resolve().parent.parent / "agents"
+    declared = agent_tiers()
+    checked = 0
+    for md in sorted(agents_dir.glob("*.md")):
+        text = md.read_text()
+        m = re.search(r"(?m)^model:\s*(\S+)", text)
+        if not m:
+            continue
+        checked += 1
+        bare = m.group(1).split("/", 1)[-1]
+        assert bare in TIER_ALIASES, (
+            f"{md.name} pins model {m.group(1)!r}; expected litellm/<tier>"
+        )
+        if md.stem in declared:
+            assert bare == declared[md.stem], (
+                f"{md.name} declares tier {bare!r} but tiers.yaml says "
+                f"{declared[md.stem]!r}"
+            )
+    assert checked, "expected agents/*.md to declare a model"
 
 
 def test_version_and_update_commands(capsys):

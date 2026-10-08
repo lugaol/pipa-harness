@@ -35,9 +35,27 @@ def models_view(request: Request):
         assigned = models_data.assignments()
     except Exception:
         assigned = {}
+    try:
+        verification = models_data.verification()
+    except Exception:
+        verification = {"checked_at": None, "results": {}}
     tier_of: dict = {}
     for tier, alias in assigned.items():
         tier_of.setdefault(alias, []).append(tier)
+
+    # A model can hold its API key and still be unusable (401 on the plan,
+    # 429 on an overloaded engine, or a provider that refuses proxy delivery).
+    # `active` only means "key present", so annotate rows with the last live
+    # probe result. A tier assigned to a known-bad model is called out.
+    results = verification.get("results") or {}
+    for row in catalog:
+        rec = results.get(row["alias"])
+        row["verified"] = None if rec is None else bool(rec.get("ok"))
+        row["verify_detail"] = "" if rec is None else str(rec.get("detail") or "")
+    assigned_broken = sorted(
+        {t: alias for t, alias in assigned.items() if results.get(alias, {}).get("ok") is False}
+        .items()
+    )
 
     return render(
         request,
@@ -46,6 +64,8 @@ def models_view(request: Request):
         discovery=discovery,
         tier_of=tier_of,
         seeded=seeded or request.query_params.get("seeded") == "1",
+        verified_at=verification.get("checked_at"),
+        assigned_broken=assigned_broken,
     )
 
 
@@ -86,6 +106,15 @@ async def save_tiers_batch(request: Request):
     # Save agent overrides
     for agent, tier in agent_overrides.items():
         agents_data.set_tier_override(agent, tier)
+
+    # Push overrides + tier-resolution changes into the deployed agent files —
+    # a save that only updates state is the bug where agents ignore it.
+    try:
+        from pipa.runtime import refresh_agents
+
+        refresh_agents()
+    except Exception:  # noqa: BLE001 — saved but not deployed; say so via flash
+        return RedirectResponse(url="/models?error=1", status_code=303)
 
     # Restart gateway so new aliases take effect
     if ok:

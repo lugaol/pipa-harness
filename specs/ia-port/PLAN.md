@@ -44,7 +44,7 @@ Rule: port the operations maturity, keep pipa generic. AOSP-only logic
 - Tests: parser fixtures, GC dry-run safety.
 
 ## Phase 6 — Task router + routing evals
-- `rules/task-router.md` (generic slugs, ≤3, union cap) + `evals/routing.json`
+- `agents/router.md` (generic slugs, ≤3, union cap) + `evals/routing.json`
   (≥20 cases, ≥5 negative) + `evals/validate.py`.
 - `pipa eval` also runs routing eval; CI-wirable exit codes.
 - Tests: validator rejects unknown slug / >3 slugs.

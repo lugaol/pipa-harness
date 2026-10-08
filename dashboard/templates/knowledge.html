@@ -61,7 +61,7 @@
       {% if g_result.hits %}
       <div class="table-wrap" style="margin-top:0.6rem">
       <table class="frag-table">
-        <thead><tr><th>Node</th><th>Type</th><th>Path</th><th>Score</th></tr></thead>
+        <thead><tr><th scope="col">Node</th><th scope="col">Type</th><th scope="col">Path</th><th scope="col">Score</th></tr></thead>
         <tbody>
           {% for h in g_result.hits %}
           <tr><td class="mono small" style="font-weight:600">{{ h.node or h.path or '?' }}</td><td class="dim small">{{ h.type or '—' }}</td><td class="mono dim small path-cell">{{ h.path or '—' }}</td><td class="mono small">{{ h.score or '—' }}</td></tr>
@@ -78,8 +78,8 @@
   <form method="get" action="/knowledge" class="picker" style="margin-bottom:0.85rem">
     <input type="hidden" name="tab" value="memory">
     <input type="hidden" name="scope" value="project">
-    <label>Project:</label>
-    <select name="proj" onchange="this.form.submit()">
+    <label for="project-picker">Project</label>
+    <select id="project-picker" name="proj" data-submit-form>
       {% for p in projects %}<option value="{{ p['path'] }}" {% if p['path'] == proj %}selected{% endif %}>{{ p['path'].rsplit('/',1)[-1] }}</option>{% endfor %}
     </select>
     <noscript><button type="submit" class="btn-sm">Go</button></noscript>
@@ -129,7 +129,7 @@
     </div>
     <div class="table-wrap">
     <table>
-      <thead><tr><th>Note</th><th>Expiry</th><th>Size</th><th>Updated</th><th></th></tr></thead>
+      <thead><tr><th scope="col">Note</th><th scope="col">Expiry</th><th scope="col">Size</th><th scope="col">Updated</th><th scope="col"></th></tr></thead>
       <tbody>
         {% for n in rows %}
         <tr>
@@ -147,7 +147,7 @@
               <button type="submit" class="btn-sm secondary">+1y</button>
             </form>
             <form method="post" action="/knowledge/delete" class="inline-form"
-                  onsubmit="return confirm('Delete {{ n.path_rel }}?')">
+                  data-confirm="Delete {{ n.path_rel }}?">
               <input type="hidden" name="tier" value="{{ scope }}">
               <input type="hidden" name="path" value="{{ n.path_rel }}">
               {% if proj %}<input type="hidden" name="proj" value="{{ proj }}">{% endif %}

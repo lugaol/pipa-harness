@@ -17,8 +17,14 @@ def cmd_memory_gc(args) -> int:
                        os.environ.get("SCRATCH_RETENTION_DAYS", "30"))
     state_dir = config.state_dir()
     vault = config.harness_root() / "vault"
+    # Project memory is a second budgeted scope. It was defined and
+    # documented but never reached collect_candidates, so over-long project
+    # notes were never reported.
+    project = config.find_project()
+    project_memory = (config.pipa_dir(project) / "memory") if project else None
     if getattr(args, "manifest", False):
-        cands = gc_lib.collect_candidates(state_dir, vault, summaries_days, scratch_days)
+        cands = gc_lib.collect_candidates(state_dir, vault, summaries_days,
+                                          scratch_days, project_memory)
         print(json.dumps({
             "summaries_days": summaries_days, "scratch_days": scratch_days,
             "eligible": len(cands),
@@ -26,7 +32,8 @@ def cmd_memory_gc(args) -> int:
                           for a in ("rollup", "prune", "report")},
         }, indent=2))
         return 0
-    cands = gc_lib.collect_candidates(state_dir, vault, summaries_days, scratch_days)
+    cands = gc_lib.collect_candidates(state_dir, vault, summaries_days,
+                                      scratch_days, project_memory)
     print(f"Retention: summaries > {summaries_days}d, scratch > {scratch_days}d")
     print(f"Eligible files: {len(cands)}")
     for rel, (action, reason) in sorted(cands.items()):

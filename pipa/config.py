@@ -42,23 +42,47 @@ def __getattr__(name: str):
     return os.environ.get(name, default)
 
 
-def load_dotenv() -> None:
-    """Load $PIPA_ROOT/.env into os.environ without overriding existing vars.
+def read_env_file(path: Path | None = None) -> dict[str, str]:
+    """Parse $PIPA_ROOT/.env into a dict. The single owner of the format.
 
-    Lets users keep provider keys (KILO_API_KEY, ...) out of shell rc files.
-    Values are never printed or logged.
+    `load_dotenv` exports it into os.environ; the dashboard's API-keys panel
+    reads it to show which keys are present. Both used to carry their own
+    parser, so a syntax change would fix one and silently not the other.
     """
-    env_file = harness_root() / ".env"
-    if not env_file.exists():
-        return
-    for line in env_file.read_text().splitlines():
+    env_file = path or (harness_root() / ".env")
+    values: dict[str, str] = {}
+    try:
+        text = env_file.read_text()
+    except OSError:
+        return values
+    for line in text.splitlines():
         line = line.strip()
         if not line or line.startswith("#") or "=" not in line:
             continue
         key, _, value = line.partition("=")
         key = key.strip()
         value = value.strip().strip("'\"")
-        if key and key not in os.environ:
+        if key:
+            values[key] = value
+    return values
+
+
+def load_dotenv(force: bool = False) -> None:
+    """Load $PIPA_ROOT/.env into os.environ.
+
+    Lets users keep provider keys (KILO_API_KEY, ...) out of shell rc files.
+    Values are never printed or logged.
+
+    An EMPTY existing value counts as absent. The dashboard is a long-lived
+    process: if it ever ran while a key was unset (`KIMI_API_KEY=` in the
+    environment), the "already in os.environ, leave it alone" rule kept that
+    empty string forever. Every later compose then judged the provider
+    unavailable and silently dropped its models from the gateway — including
+    the tier alias pointing at one. The user had paid for the key and the
+    harness had quietly stopped using it. `force=True` overwrites regardless.
+    """
+    for key, value in read_env_file().items():
+        if force or not os.environ.get(key):
             os.environ[key] = value
 
 
@@ -78,10 +102,6 @@ def harness_root() -> Path:
 def state_dir() -> Path:
     """Harness-global runtime state (service pids/logs, ledger, registry)."""
     return harness_root() / "state"
-
-
-def clis_dir() -> Path:
-    return harness_root() / "clis"
 
 
 def models_dir() -> Path:
@@ -194,10 +214,21 @@ def compose_litellm_config(
     load_dotenv()
 
     merged: dict[str, dict] = {}
+    # Which provider actually serves each merged id. Tracked here rather than
+    # re-derived from the id, because a tier alias's key ("xhigh") is not a
+    # catalog id — looking it up in `backing` misses, falls through to
+    # classify(), and mints `other/xhigh`-style aliases for models that have a
+    # perfectly good provider.
+    owner: dict[str, str] = {}
     excluded: list[str] = []
-    from pipa.providers import PROVIDERS, cached_catalog
+    from pipa.providers import PROVIDERS, cached_catalog, resolve_backing
 
     catalog = cached_catalog()
+    # One owner for attribution, read by the composer AND the registry. Skip a
+    # provider's model when another provider owns the id — decided during the
+    # add, not by popping afterwards. Popping by id removed the *winner's*
+    # entry whenever the loser had added the same id first.
+    backing = resolve_backing(catalog)
     for slug, p in PROVIDERS.items():
         entry = catalog.get(slug) or {}
         if not entry.get("ok"):
@@ -208,10 +239,14 @@ def compose_litellm_config(
             excluded.append(f"{p.label} (needs {', '.join(missing)})")
             continue
         for m in entry.get("models") or []:
-            merged[m["id"]] = {
-                "model_name": m["id"],
-                "litellm_params": p.litellm_params(m["id"]),
+            mid = str(m["id"])
+            if not force_all and backing.get(mid, slug) != slug:
+                continue  # another provider serves this id
+            merged[mid] = {
+                "model_name": mid,
+                "litellm_params": p.litellm_params(mid),
             }
+            owner[mid] = slug
 
     # Tier aliases: user-assigned via the dashboard, projected onto whatever
     # discovered model each tier points at.
@@ -227,14 +262,22 @@ def compose_litellm_config(
                 "model_name": tier,
                 "litellm_params": copy.deepcopy(base["litellm_params"]),
             }
+            owner[tier] = owner.get(target, "")
 
     # Descriptive aliases: every model also reachable as "provider/model" so
     # users can pick "moonshot/kimi-k2.7-code" instead of opaque ids.
+    # The slug prefix must be the ATTRIBUTED provider (resolve_backing), the
+    # same one the picker renders. Deriving it from the backend string instead
+    # produced `opencode/...` here and `opencode-zen/...` in the picker, so the
+    # picker advertised aliases the gateway had never heard of — which the
+    # live probe reported as "Invalid model name", once per alias.
     existing_names = set(merged)
-    for m in list(merged.values()):
-        e = make_entry(str(m["model_name"]), m.get("litellm_params") or {}, "", "local", True)
-        if e.slug and e.slug != str(m["model_name"]) and e.slug not in existing_names:
-            merged[e.slug] = {**m, "model_name": e.slug}
+    for mid, entry in list(merged.items()):
+        e = make_entry(str(mid), entry.get("litellm_params") or {}, "", "local",
+                       True, provider_slug=owner.get(mid, ""))
+        if e.slug and e.slug != str(mid) and e.slug not in existing_names:
+            merged[e.slug] = {**entry, "model_name": e.slug}
+            owner[e.slug] = owner.get(mid, "")
             existing_names.add(e.slug)
 
     settings_path = mdir / "settings.yaml"
@@ -258,6 +301,29 @@ def compose_litellm_config(
     if excluded:
         warning = "gateway: providers skipped — " + "; ".join(excluded)
     return effective, warning
+
+
+def verify_effective(path: Path | None = None) -> None:
+    """Fail closed: a composed gateway config must parse and carry models.
+
+    Raise before anything acts on the file. This is HS-002 — a bad compose
+    must never take a running gateway down, and "restart into a config that
+    does not parse" is the exact failure that does. Lives next to
+    compose_litellm_config so the write and its guard cannot drift apart.
+    """
+    effective = path or (models_dir() / ".effective.yaml")
+    import yaml
+
+    try:
+        data = yaml.safe_load(effective.read_text())
+    except FileNotFoundError as exc:
+        raise ValueError(f"gateway config missing: {effective}") from exc
+    except yaml.YAMLError as exc:
+        raise ValueError(f"gateway config does not parse: {exc}") from exc
+    if not isinstance(data, dict) or not data.get("model_list"):
+        raise ValueError(
+            f"gateway config has no model_list after compose: {effective}"
+        )
 
 
 def pick_litellm_config(root: Path | None = None) -> tuple[Path, str | None]:

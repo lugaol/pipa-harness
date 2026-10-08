@@ -1,0 +1,13 @@
+{
+  "name": "stitch",
+  "enabled": true,
+  "description": "Google Stitch - AI design-to-code UI generation",
+  "mcp": {
+    "type": "remote",
+    "url": "https://stitch.googleapis.com/mcp",
+    "timeout": 60000,
+    "headers": {
+      "X-Goog-Api-Key": "{env:STITCH_API_KEY}"
+    }
+  }
+}

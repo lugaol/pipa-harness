@@ -13,16 +13,10 @@ router = APIRouter()
 
 
 def _usage_report(summaries, spend_summary):
-    """Shared rollup via pipa.metrics (same code as the CLI)."""
+    """Adoption rollup — pipa.metrics owns the shape and the degradation."""
     from pipa import metrics as metrics_lib
 
-    try:
-        return metrics_lib.build_report(summaries, spend_summary)
-    except Exception:
-        return {"sessions": len(summaries or []), "per_day": [],
-                "top_tools": [], "top_models": [], "runtimes": [],
-                "spend": {"rows": 0, "cost_usd": 0.0,
-                          "tokens_in": 0, "tokens_out": 0}}
+    return metrics_lib.build_report_or_empty(summaries, spend_summary)
 
 _DETAIL_KEYS = ("tool", "model", "payload", "text")
 _META_KEYS = ("tokens_in", "tokens_out", "cost_usd")
@@ -121,7 +115,6 @@ def observability_view(request: Request, tab: str = "sessions", since: str = "")
         tab=tab,
         # sessions
         session_columns=session_columns, session_rows=session_rows,
-        session_count=len(session_rows),
         # spend
         spend_columns=spend_columns, spend_rows=spend_rows,
         by_model_columns=["model", "calls", "tokens in", "tokens out", "cost"],
@@ -148,7 +141,7 @@ def observability_session_detail(request: Request, sid: str):
             _parse_ts(summary["end"]) - _parse_ts(summary.get("start")), 0.0)
     return render(
         request, "session_detail.html",
-        sid=sid, found=bool(events),
+        sid=sid,
         header={
             "runtime": summary.get("runtime") or "?" if summary else "?",
             "events": len(events), "duration": f"{duration:.0f}s",

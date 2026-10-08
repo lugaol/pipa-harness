@@ -7,7 +7,7 @@ Every runtime writes agent activity to ONE append-only file per project:
 One JSON object per line. This file is the substrate for `pipa status`,
 the dashboard, `pipa replay`, `pipa diff`, evals, and any future
 flight-recorder tooling. Runtime-agnostic by construction: OpenCode writes
-via `pipa hook` (wired through opencode.jsonc), dsh sessions are mirrored in
+via `pipa hook` (wired through opencode.jsonc), sessions are mirrored in
 by tooling, anything else can `pipa hook note ...` directly.
 
 ## Canonical schema

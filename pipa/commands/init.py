@@ -37,6 +37,6 @@ def cmd_init(args) -> int:
     _say("Done. Next steps:")
     _say("  1. Start services:   pipa up")
     _say("  2. Health check:     pipa status")
-    _say(f"  3. Start runtime:    {'opencode' if name == 'opencode' else 'deepseek-harness (dsh web — npm i -g @deepseek-ai/dsh)'}")
+    _say(f"  3. Start runtime:    {name}")
     _say("  4. Review .pipa/AGENTS.md and add project-specific golden rules.")
     return 0

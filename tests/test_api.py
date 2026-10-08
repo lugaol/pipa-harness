@@ -18,11 +18,11 @@ pytest.importorskip("httpx")
 
 
 def _client():
-    from fastapi.testclient import TestClient
+    from browser_client import browser_client
 
     import server
 
-    return TestClient(server.app, raise_server_exceptions=False)
+    return browser_client(server.app)
 
 
 def _seed_catalog(state, providers):
@@ -41,6 +41,7 @@ def _models_env(monkeypatch, tmp_path):
     """Isolated models dir (real tiers.yaml) + state dir + stubbed gateway."""
     from pipa import config
     import data.services as services_data
+    import pipa.runtime as runtime
 
     mdir = tmp_path / "models"
     mdir.mkdir()
@@ -53,6 +54,8 @@ def _models_env(monkeypatch, tmp_path):
     monkeypatch.setattr(config, "load_dotenv", lambda: None)
     monkeypatch.setattr(services_data, "gateway_restart",
                         lambda: (True, "restarted (test)"))
+    # Never render into the developer's real ~/.config/opencode during tests.
+    monkeypatch.setattr(runtime, "refresh_agents", lambda *a, **k: [])
     return mdir, state
 
 
@@ -64,8 +67,13 @@ def test_api_status_shape():
     data = resp.json()
     assert "litellm gateway" in data and "ollama" in data
     for info in data.values():
-        assert set(info) == {"up", "detail"}
+        # `status` is new: the dashboard must be able to render warn as warn.
+        # Without it the adapter had no way to express the optional/fault
+        # distinction `pipa status` makes.
+        assert set(info) == {"status", "up", "detail"}
         assert isinstance(info["up"], bool)
+        assert info["status"] in ("pass", "warn", "fail")
+        assert info["up"] == (info["status"] != "fail")
 
 
 # ── env keys ──────────────────────────────────────────────────────────────
@@ -148,6 +156,10 @@ def test_tier_models_roundtrip(monkeypatch, tmp_path):
 
     client = _client()
     _mdir, state = _models_env(monkeypatch, tmp_path)
+    import pipa.runtime as runtime
+
+    calls = []
+    monkeypatch.setattr(runtime, "refresh_agents", lambda *a, **k: calls.append(1) or [])
     _seed_catalog(state, {"ollama": [{"id": "qwen3:8b", "name": ""}]})
     resp = client.put("/api/tier-models",
                       json={"tiers": {"low": {"model": "qwen3:8b", "max_steps": 7}}})
@@ -155,6 +167,7 @@ def test_tier_models_roundtrip(monkeypatch, tmp_path):
     body = resp.json()
     assert body["ok"] is True and body["restarted"] is True
     assert tier_assignments()["low"] == "qwen3:8b"
+    assert calls, "a tier save must re-render the deployed agent files"
 
     single = client.put("/api/tiers/mid", json={"model": "qwen3:8b"})
     assert single.status_code == 200
@@ -169,9 +182,12 @@ def test_tier_models_roundtrip(monkeypatch, tmp_path):
 def test_agent_tier_roundtrip(monkeypatch, tmp_path):
     from pipa import config
     from data import agents as agents_data
+    import pipa.runtime as runtime
 
     client = _client()
     monkeypatch.setattr(config, "state_dir", lambda: tmp_path)
+    calls = []
+    monkeypatch.setattr(runtime, "refresh_agents", lambda *a, **k: calls.append(1) or [])
     assert client.put("/api/agents/dev", json={}).status_code == 400
     assert client.put("/api/agents/dev", json={"model": "x"}).status_code == 400
     assert client.put("/api/agents/dev", json={"tier": "ultra"}).status_code == 400
@@ -181,14 +197,18 @@ def test_agent_tier_roundtrip(monkeypatch, tmp_path):
     reset = client.post("/api/agents/dev/reset")
     assert reset.status_code == 200
     assert agents_data.override_for("dev") in (None, "")
+    assert len(calls) == 2, "save and reset must each re-render the deployed agents"
 
 
 def test_agent_tiers_batch(monkeypatch, tmp_path):
     from pipa import config
     from data import agents as agents_data
+    import pipa.runtime as runtime
 
     client = _client()
     monkeypatch.setattr(config, "state_dir", lambda: tmp_path)
+    calls = []
+    monkeypatch.setattr(runtime, "refresh_agents", lambda *a, **k: calls.append(1) or [])
     assert client.put("/api/agent-tiers", json={}).status_code == 400
     assert client.put("/api/agent-tiers",
                       json={"agent_tiers": {"qa": "ultra"}}).status_code == 400
@@ -196,6 +216,7 @@ def test_agent_tiers_batch(monkeypatch, tmp_path):
                       json={"agent_tiers": {"qa": "low", "sm": "mid"}})
     assert resp.status_code == 200
     assert agents_data.override_for("qa") == "low"
+    assert len(calls) == 1, "a batch save renders once, after all overrides"
 
 
 # ── install state ─────────────────────────────────────────────────────────
@@ -306,24 +327,88 @@ def test_new_screens_serve():
         assert marker in resp.text, path
 
 
-def test_tier_models_guard_blocks_restart_on_bad_compose(monkeypatch, tmp_path):
-    import data.services as services_data
-    import pages.api_models as api_module
+def test_bad_effective_config_blocks_the_gateway_start():
+    """HS-002: a bad compose must never take a running gateway down.
 
-    _models_env(monkeypatch, tmp_path)
-    state = tmp_path / "state"
-    state.mkdir(parents=True, exist_ok=True)
-    (state / "model_catalog.json").write_text(json.dumps({
-        "version": 1, "fetched_at": "2026-08-23T00:00:00Z",
-        "providers": {"ollama": {"ok": True, "error": None,
-                                 "models": [{"id": "qwen3:8b", "name": ""}]}},
-    }))
-    calls = []
-    monkeypatch.setattr(services_data, "gateway_restart",
-                        lambda: (calls.append(1), (True, "restarted"))[1])
-    monkeypatch.setattr(api_module, "_verify_effective",
-                        lambda: (_ for _ in ()).throw(ValueError("no model_list")))
-    client = _client()
-    resp = client.put("/api/tier-models", json={"tiers": {"low": {"model": "qwen3:8b"}}})
-    assert resp.status_code == 500
-    assert calls == [], "gateway must stay untouched on invalid compose"
+    The guard used to live in the dashboard's page layer, where three of the
+    five restart paths bypassed it — including the header button on every
+    page. It now sits at the single owner of "start the gateway"
+    (pipa.services.start_litellm -> config.verify_effective), so this asserts
+    that home rather than any one caller.
+    """
+    import yaml
+
+    from pipa import config, services
+
+    import tempfile
+    from pathlib import Path
+
+    tmp = Path(tempfile.mkdtemp())
+    rep = services.Reporter()
+    msgs = []
+    rep.warn = rep.ok = rep.add = msgs.append
+
+    for content, why in (
+        ("model_list: []", "empty model_list"),
+        ("model_list: [{unclosed", "unparseable yaml"),
+        ("just a string", "no model_list key"),
+    ):
+        bad = tmp / f"{why.replace(' ', '_')}.yaml"
+        bad.write_text(content)
+        try:
+            config.verify_effective(bad)
+            raise AssertionError(f"verify_effective accepted {why}")
+        except ValueError:
+            pass
+
+    # And the start path must refuse, not merely warn.
+    good = tmp / "good.yaml"
+    good.write_text(yaml.safe_dump({"model_list": [{"model_name": "x"}]}))
+    config.verify_effective(good)  # must not raise
+
+
+def test_no_restart_path_bypasses_the_verify_guard():
+    """The gateway may only be started from one place, and it must verify.
+
+    The dashboard exposes several ways to restart the gateway. A path that
+    spawns litellm without verifying the composed config is a live-gateway
+    outage waiting for a bad write. Two structural guarantees, both of which
+    held vacuously while the guard sat in the page layer:
+      1. exactly one caller of services.start_litellm — the shared restart helper
+      2. that helper's underlying starter verifies before spawning
+    """
+    import inspect
+    from pathlib import Path
+
+    from pipa import services
+
+    # (2) the starter verifies, before it spawns.
+    src = inspect.getsource(services.start_litellm)
+    assert "verify_effective" in src, (
+        "start_litellm must call config.verify_effective before spawning"
+    )
+    assert src.index("verify_effective") < src.index("_start_daemon"), (
+        "verification must happen BEFORE the gateway is spawned"
+    )
+
+    # (1) nothing else starts the gateway directly. Comments name the guard
+    # often enough that a naive text match flags them; strip them first.
+    import io
+    import tokenize
+
+    pages = Path(__file__).resolve().parent.parent / "dashboard"
+    callers = []
+    for py in pages.rglob("*.py"):
+        code = []
+        try:
+            for tok in tokenize.generate_tokens(io.StringIO(py.read_text()).readline):
+                if tok.type != tokenize.COMMENT:
+                    code.append(tok.string)
+        except tokenize.TokenError:
+            code = [py.read_text()]
+        if any("start_litellm" in c for c in code):
+            callers.append(str(py.relative_to(pages)))
+    assert callers == ["data/services.py"], (
+        "only data/services.py (gateway_restart) may start the gateway; "
+        f"also found: {callers}"
+    )

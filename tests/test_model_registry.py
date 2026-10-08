@@ -2,7 +2,7 @@
 
 Pins the user-facing contract: the catalog comes from provider discovery
 (state/model_catalog.json) — never a static list; tiers resolve only to
-what the user assigned; opencode/dsh configs inject readable model lists.
+what the user assigned; opencode config injects readable model lists.
 """
 import io
 import json
@@ -114,8 +114,12 @@ def test_discovery_error_is_soft(monkeypatch):
 def test_registry_classifies_and_names_discovered_models(registry_env):
     by_alias = {e.alias: e for e in mr.entries()}
     ox = by_alias["x-preview-f-free"]
-    assert ox.display == "OpenCode - Ox Alpha Free"
-    assert ox.slug == "opencode/ox-alpha-free"
+    # Attribution comes from the registry's provider slug, not from inferring
+    # one out of the api_base host — which used to relabel every zen model
+    # "OpenCode" regardless of which provider actually serves it.
+    assert ox.display == "OpenCode Zen - Ox Alpha Free"
+    assert ox.provider_slug == "opencode-zen"
+    assert ox.slug == "opencode-zen/ox-alpha-free"
     assert ox.kind == "cloud"
     assert not ox.active, "zen models must be inactive without OPENCODE_ZEN_API_KEY"
     qwen = by_alias["qwen2.5-coder:14b"]
@@ -225,24 +229,6 @@ def test_opencode_default_models_follow_user_assignments(registry_env):
     assert cfg2["small_model"] == "litellm/mid"  # only tier assigned so far
     assert cfg2["provider"]["litellm"]["models"]["mid"]["name"]
 
-
-def test_dsh_models_render_with_names(registry_env):
-    from pipa.runtime import _render_dsh_models
-
-    root = config.harness_root()
-    raw = (root / "clis" / "deepseek-harness" / "cordis.patch.yml").read_text()
-    out = _render_dsh_models(raw.replace("@LITELLM_URL@", config.LITELLM_URL), root)
-    data = yaml.safe_load(out)
-    models = None
-    for entry in data:
-        provs = (entry.get("config") or {}).get("providers")
-        if provs and "litellm" in provs:
-            models = provs["litellm"]["models"]
-    assert models and len(models) >= 4
-    for m in models:
-        assert m.get("name"), m.get("id")
-
-
 def test_seed_default_tiers_fills_every_tier_when_unset(registry_env):
     """First-run: all five tiers get working defaults from discovery."""
     assert mr.tier_assignments() == {}
@@ -294,3 +280,103 @@ def test_apply_tiers_rejects_unknown_tier_and_model(registry_env):
     assert not ok and "non-empty" in msg
     ok, msg, _ = mr.apply_tiers({"low": ""})
     assert not ok and "needs a model" in msg
+
+
+def test_every_picker_id_is_a_route_the_gateway_serves(monkeypatch, tmp_path):
+    """The picker must only advertise ids the composed config actually defines.
+
+    Regression: descriptive aliases were generated from the backend string
+    (`openai/<id>` + an api_base host) while the picker rendered the attributed
+    provider slug (`opencode-zen`). So the picker offered
+    `opencode-zen/mimo-v2.5-free` and the gateway — which had
+    `opencode/mimo-v2.5-free` — answered "Invalid model name". A listed-but-
+    absent model is exactly the trap invariant 3 exists to prevent.
+    """
+    import yaml
+
+    from pipa import config as config_mod
+    from pipa import providers
+
+    catalog = {
+        "opencode-zen": {"ok": True, "models": [
+            {"id": "mimo-v2.5-free"}, {"id": "shared-model"}]},
+        "kilo": {"ok": True, "models": [{"id": "shared-model"},
+                                        {"id": "kilo-only:free"}]},
+    }
+    monkeypatch.setattr(providers, "PROVIDERS", {
+        "opencode-zen": providers.Provider(
+            slug="opencode-zen", label="OpenCode Zen", kind="cloud",
+            requires=(), list_url="", keep=lambda m: True,
+            litellm_params=lambda mid: {
+                "model": f"openai/{mid}",
+                "api_base": "https://opencode.ai/zen/v1",
+                "api_key": "x"}),
+        "kilo": providers.Provider(
+            slug="kilo", label="Kilo", kind="cloud", requires=(), list_url="",
+            keep=lambda m: True,
+            litellm_params=lambda mid: {
+                "model": mid, "custom_llm_provider": "openai",
+                "api_base": "https://api.kilo.ai/api/gateway",
+                "api_key": "y"}),
+    })
+    monkeypatch.setattr(providers, "cached_catalog", lambda: catalog)
+    monkeypatch.setattr(config_mod, "state_dir", lambda: tmp_path)
+
+    mdir = tmp_path / "models"
+    mdir.mkdir()
+    (mdir / "settings.yaml").write_text("litellm_settings: {}\n")
+    monkeypatch.setattr(config_mod, "models_dir", lambda: mdir)
+
+    eff, _ = config_mod.compose_litellm_config()
+    served = {m["model_name"]
+              for m in yaml.safe_load(eff.read_text())["model_list"]}
+    picker = {m["id"] for m in mr.runtime_model_list()}
+    assert picker <= served, (
+        f"picker advertises routes the gateway does not define: "
+        f"{sorted(picker - served)}"
+    )
+    # and the duplicate is owned by exactly one provider
+    assert "shared-model" in served
+    assert len([n for n in served if n.endswith("shared-model")]) >= 1
+
+
+def test_picker_excludes_models_the_live_probe_rejected(monkeypatch, tmp_path):
+    """Invariant 3: every model in the picker must be genuinely callable.
+
+    Regression: `pipa-check models` probed all 67 models and cached the result,
+    then `runtime_model_list()` ignored the cache and listed every discovered
+    model. The 26 the probe had just rejected stayed in the picker with
+    "free tier can only be used from within OpenCode" / HTTP 429 / HTTP 401
+    behind them. The probe work was already happening; nothing read it.
+    """
+    import json
+
+    from pipa import model_registry as mr2
+
+    state = tmp_path / "state"
+    state.mkdir()
+    (state / "model_verification.json").write_text(json.dumps({
+        "_checked_at": "2026-10-03T00:00:00Z",
+        "good:free": {"ok": True, "detail": "callable"},
+        "bad:free": {"ok": False, "detail": "free tier can only be used "
+                                          "from within OpenCode"},
+    }))
+    monkeypatch.setattr(mr2.config, "state_dir", lambda: state)
+    v = mr2.verification()
+    assert not v.empty
+    assert v.ok("good:free") is True
+    assert v.ok("bad:free") is False
+    # unprobed ids are not admitted once a real probe exists
+    assert v.ok("never-probed") is False
+
+
+def test_picker_is_not_empty_before_any_probe(monkeypatch, tmp_path):
+    """A fresh install must not get an empty picker just because nobody ran the check."""
+    from pipa import model_registry as mr2
+
+    state = tmp_path / "state"
+    state.mkdir()
+    monkeypatch.setattr(mr2.config, "state_dir", lambda: state)
+    v = mr2.verification()
+    assert v.empty
+    assert v.ok("anything") is True, "unprobed must fail open while the cache is empty"

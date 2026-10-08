@@ -7,7 +7,7 @@ Two-layer design:
    below. It contains no install logic of its own.
 2. **Implementation layer** (`bin/pipa install <component>`, see
    `pipa/cli.py` → `INSTALL_COMPONENTS` / `cmd_install`) — does all the heavy
-   lifting: uv, ollama, litellm, graphify, dsh, opencode, apps.
+   lifting: uv, ollama, litellm, graphify, opencode, apps.
 
 **DRY rule:** there is exactly ONE implementation per component (the Python
 CLI). These step scripts are thin wrappers so a user can run a single phase
@@ -19,7 +19,7 @@ without knowing Make, and so `bootstrap.sh` / `make` share identical behavior.
 |--------|---------|--------------|
 | `00-deps.sh` | Verify base tooling exists: git, rsync, python3. Fails fast with a clear message. | — |
 | `10-core.sh` | Core engine: uv tool manager, LiteLLM gateway, graphify code graph. | `bin/pipa install uv litellm graphify` |
-| `20-runtimes.sh` | Agent runtimes: deepseek-harness + opencode. | `bin/pipa install dsh opencode` |
+| `20-runtimes.sh` | Agent runtime: opencode. | `bin/pipa install opencode` |
 | `30-apps.sh` | OPTIONAL GUI apps (obsidian, emdash). Skip with `PIPA_SKIP_APPS=1`. | `bin/pipa install apps` |
 | `40-wire.sh` | Final wiring: ensure tools + start services, no GUI apps, no model pulls. Also persists PATH via `services.persist_path`. | `bin/pipa up --no-apps --no-pull` |
 

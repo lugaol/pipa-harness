@@ -10,7 +10,7 @@ function renderAgentTiersTable() {
     return a.name < b.name ? -1 : 1;
   });
   if (!agents.length) {
-    atbody.innerHTML = '<tr><td colspan="5" class="empty-state" style="padding:24px"><p>No agents discovered</p></td></tr>';
+    renderEmptyRow(atbody, 5, 'No agents discovered');
     return;
   }
   atbody.innerHTML = agents.map(function (a) {
@@ -28,18 +28,22 @@ function renderAgentTiersTable() {
       (a.recommended_model ? '<div class="text-xs text-muted">recommended: <span class="mono">' + escapeHtml(a.recommended_model) + '</span></div>' : '') + '</td>' +
       '<td><select id="tier-agent-tier-' + escapeAttr(a.name) + '" style="background:var(--bg-base);color:var(--text-primary);border:1px solid var(--border-default);border-radius:var(--radius-sm);padding:6px 10px;font-size:12px;font-family:var(--font-sans);cursor:pointer;width:100%;max-width:200px;">' +
       '<option value="">— default —</option>' + tierOptionHtml(tiers, a.override || '') + '</select></td>' +
-      '<td>' + model + (a.steps ? '<div class="text-xs text-muted mt-1">max steps: <span class="mono">' + a.steps + '</span></div>' : '') + '</td>' +
+      '<td>' + model + (a.steps ? '<div class="text-xs text-muted mt-1">max steps: <span class="mono">' + escapeHtml(String(a.steps)) + '</span></div>' : '') + '</td>' +
       '<td class="flex gap-2 flex-wrap">' +
-      '<button class="btn btn-primary btn-sm" onclick="saveAgentTier(\'' + escapeAttr(a.name) + '\')">Save</button>' +
-      '<button class="btn btn-secondary btn-sm" onclick="resetAgentTier(\'' + escapeAttr(a.name) + '\')">Reset</button>' +
+      actionButton('saveAgentTier', a.name, 'Save', 'primary') +
+      actionButton('resetAgentTier', a.name, 'Reset', 'secondary') +
       '</td></tr>';
   }).join('');
 }
 
 async function saveAgentTier(name) {
-  const sel = document.getElementById('tier-agent-tier-' + name);
-  if (!sel.value) { toast('Select a tier first', 'error'); return; }
   try {
+    // The lookup lives inside the try: a poll or a failed load can re-render
+    // the row between paint and click, and a bare `.value` on the null that
+    // leaves behind is an uncaught TypeError with no toast.
+    const sel = document.getElementById('tier-agent-tier-' + name);
+    if (!sel) { toast('That row is no longer on screen — reload the page', 'error'); return; }
+    if (!sel.value) { toast('Select a tier first', 'error'); return; }
     const r = await apiPut('/agents/' + encodeURIComponent(name), { tier: sel.value });
     if (!r.ok) { toast(r.detail || 'Save failed', 'error'); return; }
     toast('@' + name + ' → ' + r.tier, 'success');

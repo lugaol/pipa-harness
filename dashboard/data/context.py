@@ -34,11 +34,9 @@ _PATTERNS = {
     ("project", "agents"): ("agents-local/*.md",),
 }
 
-
 def list_projects() -> List[dict]:
     """Registry projects available to the project tier (dashboard has no cwd)."""
     return projects_data.registry_entries()
-
 
 def tier_root(tier: str, project_path: Optional[str] = None) -> Optional[Path]:
     """Base dir for a tier.
@@ -68,7 +66,6 @@ def tier_root(tier: str, project_path: Optional[str] = None) -> Optional[Path]:
         return config.pipa_dir(project) if project.exists() else None
     return None
 
-
 def _compiled_pattern(pat: str):
     """Glob→regex where * never crosses '/' and ** matches any depth."""
     parts = []
@@ -78,7 +75,6 @@ def _compiled_pattern(pat: str):
         else:
             parts.append("".join("[^/]*" if c == "*" else re.escape(c) for c in seg))
     return re.compile("^" + "/".join(parts) + "$")
-
 
 def resolve_entry(tier: str, tab: str, rel: str,
                   project_path: Optional[str] = None) -> Optional[Path]:
@@ -112,7 +108,6 @@ def resolve_entry(tier: str, tab: str, rel: str,
             return resolved
     return None
 
-
 def _title_of(path: Path) -> str:
     """First markdown heading, else the file stem."""
     try:
@@ -124,7 +119,6 @@ def _title_of(path: Path) -> str:
     except OSError:
         pass
     return path.stem
-
 
 def list_entries(tier: str, project_path: Optional[str], tab: str) -> List[dict]:
     """[{path_rel, title, size, size_h, mtime_h}] sorted by path."""
@@ -158,7 +152,6 @@ def list_entries(tier: str, project_path: Optional[str], tab: str) -> List[dict]
     out.sort(key=lambda e: e["path_rel"])
     return out
 
-
 def read_entry(tier: str, project_path: Optional[str], tab: str, rel: str) -> Optional[str]:
     target = resolve_entry(tier, tab, rel, project_path)
     if target is None or not target.is_file():
@@ -167,7 +160,6 @@ def read_entry(tier: str, project_path: Optional[str], tab: str, rel: str) -> Op
         return target.read_text(errors="replace")
     except OSError:
         return None
-
 
 def new_entry_path(tier: str, project_path: Optional[str], tab: str, name: str) -> Tuple[bool, str]:
     """Map a user-typed name to a jailed rel path ('skills/<slug>/SKILL.md'...)."""
@@ -183,7 +175,6 @@ def new_entry_path(tier: str, project_path: Optional[str], tab: str, name: str) 
         return False, "name may contain letters, digits, dot, dash, underscore"
     return True, f"{tab}/{stem}.md"
 
-
 def write_entry(tier: str, project_path: Optional[str], tab: str, rel: str, content: str) -> Tuple[bool, str]:
     """Create/update one entry through the jail; rejects >200KB payloads."""
     payload = content.replace("\r\n", "\n")
@@ -198,7 +189,6 @@ def write_entry(tier: str, project_path: Optional[str], tab: str, rel: str, cont
     except OSError as exc:
         return False, f"write failed: {exc}"
     return True, ""
-
 
 def delete_entry(tier: str, project_path: Optional[str], tab: str, rel: str) -> Tuple[bool, str]:
     target = resolve_entry(tier, tab, rel, project_path)
@@ -216,8 +206,3 @@ def delete_entry(tier: str, project_path: Optional[str], tab: str, rel: str) -> 
         return False, f"delete failed: {exc}"
     return True, ""
 
-
-def group_of(rel: str) -> str:
-    """Memory grouping key: first subdir under the tier root, else '.'."""
-    parts = PurePosixPath(str(rel)).parts
-    return parts[0] if len(parts) > 1 else "."

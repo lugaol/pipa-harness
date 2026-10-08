@@ -49,3 +49,38 @@ providers:
       custom_llm_provider: openai
       api_base: https://api.kilo.ai/api/gateway
       api_key: os.environ/KILO_API_KEY
+
+  # Kimi subscription (Kimi Code plan). The coding endpoint is the one the
+  # subscription plan is entitled to — api.moonshot.ai 401s on this key.
+  # No `keep` filter: this is a paid plan, not a free tier, so every model the
+  # plan advertises is a candidate. Callability still must be verified live
+  # (pipa-check tiers) — e.g. kimi-for-coding-highspeed needs a higher plan.
+  - slug: kimi
+    label: Kimi Subscription
+    kind: cloud
+    requires: [KIMI_API_KEY]
+    list_url: https://api.kimi.com/coding/v1/models
+    litellm:
+      model: "{id}"
+      custom_llm_provider: openai
+      api_base: https://api.kimi.com/coding/v1
+      api_key: os.environ/KIMI_API_KEY
+
+  # TypeSafe Jev - System One decision model (fast, structured decisions)
+  # Free tier available via OpenCode Zen (no key needed)
+  # Paid tier via TypeSafe API ($0.042/1M in, out free)
+  - slug: typesafe-jev
+    label: TypeSafe Jev (Decision Model)
+    kind: cloud
+    requires: []  # Free via OpenCode Zen, no key needed
+    list_url: https://opencode.ai/zen/v1/models
+    keep: jev_only            # jev-* models only
+    litellm:
+      model: "openai/{id}"
+      api_base: https://opencode.ai/zen/v1
+      api_key: os.environ/OPENCODE_ZEN_API_KEY  # Optional on zen free
+      custom_llm_provider: openai
+    description: >
+      Jev is a System One decision model for fast structured decisions.
+      NOT for code generation or text output. For routing, triage, classification.
+      70ms latency, free tier, zero hallucination.

@@ -13,13 +13,22 @@
     <h2>Model catalog</h2>
     <span class="dim small">{{ catalog|length }} models · {{ discovery.providers|selectattr('ok')|list|length }}/{{ discovery.providers|length }} providers discovered{% if discovery.fetched_at %} · {{ discovery.fetched_at }}{% endif %}</span>
   </div>
-  <p class="dim small" style="margin-bottom:0.6rem">Discovered live — free tiers rotate, so this list is never hardcoded.</p>
+  <p class="dim small" style="margin-bottom:0.6rem">Discovered live — free tiers rotate, so this list is never hardcoded. <strong>Key</strong> only means credentials are configured; <strong>Callability</strong> is a real probe result{% if verified_at %}, last run {{ verified_at }}{% endif %}. A model can hold its key and still be rejected by the provider.</p>
+  {% if assigned_broken %}
+  <div class="panel" style="border-left:3px solid var(--danger);margin-bottom:0.8rem">
+    <strong>{% if assigned_broken|length == 1 %}1 assigned tier is unusable{% else %}{{ assigned_broken|length }} assigned tiers are unusable{% endif %}</strong>
+    <div class="dim small" style="margin-top:0.3rem">
+      {% for tier, alias in assigned_broken %}<div class="mono small">{{ tier }} → {{ alias }}</div>{% endfor %}
+    </div>
+    <div class="dim small" style="margin-top:0.4rem">Agents on these tiers will fail at call time. Reassign with: <span class="mono">pipa-check tiers</span></div>
+  </div>
+  {% endif %}
   <form method="post" action="/api/models/refresh" class="inline-form" style="margin-bottom:0.8rem">
     <button type="submit" class="btn-sm secondary">Refresh discovery</button>
   </form>
   <div class="table-wrap">
   <table>
-    <thead><tr><th>Model</th><th>Name</th><th>Provider</th><th>Tiers</th><th>State</th></tr></thead>
+    <thead><tr><th scope="col">Model</th><th scope="col">Name</th><th scope="col">Provider</th><th scope="col">Tiers</th><th scope="col">Key</th><th scope="col">Callability</th></tr></thead>
     <tbody>
       {% for c in catalog %}
       <tr>
@@ -27,10 +36,19 @@
         <td class="dim small">{{ c.display }}</td>
         <td class="dim small">{{ c.provider }}</td>
         <td>{% for t in tier_of.get(c.alias, []) %}<span class="badge accent">{{ t }}</span> {% else %}<span class="dim small">—</span>{% endfor %}</td>
-        <td>{% if c.active %}<span class="badge ok">● active</span>{% else %}<span class="badge warn">○ needs key</span>{% endif %}</td>
+        <td>{% if c.active %}<span class="badge ok">present</span>{% else %}<span class="badge warn">missing</span>{% endif %}</td>
+        <td>
+          {% if c.verified is none %}
+            <span class="dim small" title="Not yet probed — run: pipa-check models">unverified</span>
+          {% elif c.verified %}
+            <span class="badge ok" title="Confirmed callable by a live 1-token request">● callable</span>
+          {% else %}
+            <span class="badge expired" title="{{ c.verify_detail }}">✕ fails</span>
+          {% endif %}
+        </td>
       </tr>
       {% else %}
-      <tr><td colspan="5">{% with message='No models discovered yet — check Providers, then Refresh discovery.' %}{% include "empty_state.html" %}{% endwith %}</td></tr>
+      <tr><td colspan="6">{% with message='No models discovered yet — check Providers, then Refresh discovery.' %}{% include "empty_state.html" %}{% endwith %}</td></tr>
       {% endfor %}
     </tbody>
   </table>

@@ -22,7 +22,7 @@ LAYER 6   <project>/.pipa/       → thin project overlay (rules/skills/memory/s
 | Layer | Trigger | Example |
 |-------|---------|---------|
 | 0 | Always | OpenCode reads AGENTS.md first |
-| 1 | Path glob touched | `git status` → rules/git-workflow.md |
+| 1 | Path glob touched | `git status` → AGENTS.md approval gates |
 | 2 | Keyword in message | "bug" → skills/debugging/SKILL.md |
 | 3 | Phase invocation | @analyst → agents/analyst.md + specs/ |
 | 4 | Question + graphify exists | graphify query "Auth" → graphify-out/ |
@@ -113,7 +113,9 @@ Rule: Dev opens ONE story file and has everything. No conversation history neede
 | HARD | Blocking — never bypass | Agents must refuse if violated |
 | SOFT | Guideline — prefer | Agents should follow, can deviate with reason |
 
-Current rules: `rules/security.md`, `rules/code-review.md`, `rules/testing.md`, `rules/git-workflow.md`.
+Current rules: `AGENTS.md` (always-loaded map + prohibitions),
+`skills/security-hardening`, `skills/code-review`, `skills/working-discipline`.
+The old always-loaded `rules/*.md` set was folded into these on 2026-09-30.
 
 ---
 
@@ -193,7 +195,7 @@ migrate with `pipa migrate`).
 
 ```
 .pipa/
-├── runtime              → selected runtime (opencode | deepseek-harness)
+├── runtime              → selected runtime (opencode)
 ├── AGENTS.md            → project facts (symlinked from root as AGENTS.md)
 ├── rules/               → project-scoped rules
 ├── memory/              → decisions/ + research/

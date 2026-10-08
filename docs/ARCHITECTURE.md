@@ -11,7 +11,6 @@ CONTRACT   AGENTS.md  rules/*.md  skills/*/SKILL.md  agents/*.md  specs/
            Pure markdown. Any runtime can consume it. This is the API.
 
 RUNTIMES   clis/opencode/global.jsonc         -> ~/.config/opencode/opencode.jsonc
-           clis/deepseek-harness/cordis.patch.yml      -> ~/.dsh/cordis.patch.yml (+ .credentials.yaml)
            Templates rendered once per machine by `pipa up` / wire step.
            Projects hold NO runtime config — switching is `pipa runtime set <name>`.
 
@@ -70,7 +69,8 @@ Install root: `$PIPA_ROOT` > directory containing the `pipa` package (checkout) 
 | `mcp/<name>/` | MCP integration registry (enabled flag + verbatim server block) |
 | `tools/` | evals, litellm helpers, memory_store indexer/query, ollama, tracing |
 | `dashboard/` | FastAPI app; pages/ modules, fragments/, templates/, static/ |
-| `pipa/` | CLI lib: cli, config (composer+paths), runtime, scaffold, services, hooks, recall, spend |
+| `pipa/` | CLI lib: cli, config (composer+paths+`verify_effective`), runtime (wiring+agent render), providers (discovery+`resolve_backing`), model_registry, scaffold, services, hooks, recall, spend |
+| `dashboard/` | FastAPI app: `pages/` (routes), `data/` (**thin adapters only** — logic lives in `pipa/`), `templates/`, `compat.py` (retired-route redirects) |
 | `install/` | Makefile + steps/ scripts (deps, core, runtimes, apps, wire) |
 | `tests/` | conformance suite pinning fragment/wiring/hook contracts |
 | `vault/`, `state/` | dated memory and session/task state |
@@ -80,7 +80,26 @@ Install root: `$PIPA_ROOT` > directory containing the `pipa` package (checkout) 
 | Want to... | Do this |
 |------------|---------|
 | add a runtime | create `clis/<name>/` with a template + wire entry; register it in the runtime table |
-| add a model provider | add it to live discovery in `pipa/providers.py`; assign its model per tier on the dashboard Models page |
+| add a model provider | add an entry to `models/providers.yaml` (no Python change); assign its model per tier on the dashboard Models page |
 | add an integration | drop `mcp/<name>/config.json`; merged at next wire |
 | add a skill | `skills/<name>/SKILL.md` globally or `.pipa/skills/<name>/` per project (wins on name clash) |
 | add a rule | `rules/<topic>.md` (global) or `.pipa/rules/` (project); attach via path scope |
+| change an agent's default tier | edit `models/tiers.yaml::agent_tiers` — the **only** place it is written |
+| retire a dashboard page | fold it into its successor and add one redirect to `dashboard/pages/compat.py`; never leave the old page module (its handlers become unreachable, and `pipa-check deadcode` exists because that happened) |
+
+## Single-owner invariants
+
+Several facts were once written in two places and drifted. Each now has one
+owner, and the drift check that only warned about it is gone:
+
+| Fact | Owner |
+|------|-------|
+| agent default tier | `models/tiers.yaml::agent_tiers` → `runtime.agent_tier()` |
+| tier → model | `state/tier_assignments.json` (user-owned, dashboard) |
+| which provider backs a model id | `providers.resolve_backing()` — composer *and* registry both read it |
+| `.effective.yaml` validity | `config.verify_effective()`, called inside `services.start_litellm` |
+| subsystem health + severity | `status.collect_checks()` — CLI and dashboard both render it |
+| agent frontmatter parsing | `commands.agents.parse_frontmatter` |
+| `.env` format | `config.read_env_file()` |
+| MCP `enabled` default | `runtime.mcp_registry()` |
+| memory line budgets | `memory_gc.VAULT_BUDGET` / `PROJECT_MEMORY_BUDGET` |
